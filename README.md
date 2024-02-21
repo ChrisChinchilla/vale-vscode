@@ -8,7 +8,7 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 
 ## Installation
 
-1. Install [Vale](https://docs.errata.ai/vale/install);
+1. Install [Vale](https://vale.sh/docs/vale-cli/installation/);
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
