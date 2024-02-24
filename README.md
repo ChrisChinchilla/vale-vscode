@@ -26,6 +26,8 @@ Browse detailed information for each alert, including the file location, style, 
 
 ### Go-to rule
 
+**This feature is temporarily disabled due to changes in the Vale CLI. It will be re-enabled in the future.**
+
 ![Screenshot of go to rule interface](https://user-images.githubusercontent.com/8785025/89956857-d1635680-dbea-11ea-8e50-8e2715721e5d.png)
 
 Navigate from an in-editor alert to a rule's implementation on your `StylesPath` by clicking "View Rule".
