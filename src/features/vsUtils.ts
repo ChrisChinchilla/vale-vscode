@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as which from "which";
-import * as fs from "fs";
+// import * as fs from "fs";
 import { execFile } from "child_process";
 
 import * as vscode from "vscode";
@@ -132,7 +132,7 @@ export const isElligibleDocument = async (
  */
 export const toDiagnostic = (
   alert: IValeErrorJSON,
-  styles: string,
+  // styles: string,
   backend: string,
   offset: number
 ): vscode.Diagnostic => {
@@ -160,17 +160,17 @@ export const toDiagnostic = (
     diagnostic.code = alert.Check;
   }
 
-  const name = alert.Check.split(".");
-  const rule = vscode.Uri.file(path.join(styles, name[0], name[1] + ".yml"));
+  // const name = alert.Check.split(".");
+  // const rule = vscode.Uri.file(path.join(styles, name[0], name[1] + ".yml"));
 
-  if (fs.existsSync(rule.fsPath)) {
-    diagnostic.relatedInformation = [
-      new vscode.DiagnosticRelatedInformation(
-        new vscode.Location(rule, new vscode.Position(0, 0)),
-        "View rule"
-      ),
-    ];
-  }
+  // if (fs.existsSync(rule.fsPath)) {
+  //   diagnostic.relatedInformation = [
+  //     new vscode.DiagnosticRelatedInformation(
+  //       new vscode.Location(rule, new vscode.Position(0, 0)),
+  //       "View rule"
+  //     ),
+  //   ];
+  // }
   return diagnostic;
 };
 

@@ -120,7 +120,7 @@ export default class ValeProvider implements vscode.CodeActionProvider {
         if (!isReadabilityProblem || readabilityProblemLocation !== "status") {
           let diagnostic = utils.toDiagnostic(
             alerts[i],
-            this.stylesPath,
+            // this.stylesPath,
             backend,
             offset
           );
