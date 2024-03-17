@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import nspell from "nspell";
-import dictionary from "dictionary-en";
+import en from "dictionary-en";
 
 export const getSpellingSuggestions = async (
   range: vscode.Range,
@@ -8,11 +8,7 @@ export const getSpellingSuggestions = async (
 ): Promise<string[]> =>
   new Promise((resolve, reject) => {
     const word = file.getText(range);
-    dictionary(function (error, en) {
-      if (error) {
-        reject(error);
-      }
-      const spell = nspell(en);
-      resolve(spell.suggest(word));
-    });
+    // TODO: Handle reject?
+    const spell = nspell(en as any);
+    resolve(spell.suggest(word));
   });
