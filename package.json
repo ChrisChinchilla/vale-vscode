@@ -20,7 +20,7 @@
   },
   "version": "0.18.5",
   "engines": {
-    "vscode": "^1.86.0"
+    "vscode": "^1.87.0"
   },
   "categories": [
     "Linters"
