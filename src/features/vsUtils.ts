@@ -13,6 +13,25 @@ function replaceWorkspaceFolder(
   file: vscode.TextDocument
 ): string | null {
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(file.uri);
+
+  // Handle mutli-root workspace scenarios.
+  if (vscode.workspace.workspaceFolders) {
+    let replaced = false;
+    vscode.workspace.workspaceFolders.some(function (value, index, array) {
+      let searchStr = `\${workspaceFolder:${value.name}}`;
+      if (customPath.startsWith(searchStr)) {
+        // Handle workspace folder ${workspaceFolder:NAME} scenario
+        let newPath = customPath.replace(searchStr, value.uri.fsPath);
+        customPath = path.normalize(newPath);
+        replaced = true;
+        return true;
+      }
+      return false;
+    });
+    if (replaced) {
+      return customPath;
+    }
+  }
   if (workspaceFolder) {
     customPath = customPath.replace("${workspaceFolder}", workspaceFolder.uri.fsPath);
     customPath = path.normalize(customPath);
