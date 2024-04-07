@@ -12,10 +12,30 @@ function replaceWorkspaceFolder(
   customPath: string,
   file: vscode.TextDocument
 ): string | null {
-  customPath = path.normalize(customPath);
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(file.uri);
+
+  // Handle mutli-root workspace scenarios.
+  if (vscode.workspace.workspaceFolders) {
+    let replaced = false;
+    vscode.workspace.workspaceFolders.some(function (value, index, array) {
+      let searchStr = `\${workspaceFolder:${value.name}}`;
+      if (customPath.startsWith(searchStr)) {
+        // Handle workspace folder ${workspaceFolder:NAME} scenario
+        let newPath = customPath.replace(searchStr, value.uri.fsPath);
+        customPath = path.normalize(newPath);
+        replaced = true;
+        return true;
+      }
+      return false;
+    });
+    if (replaced) {
+      return customPath;
+    }
+  }
   if (workspaceFolder) {
-    return customPath.replace("${workspaceFolder}", workspaceFolder.uri.fsPath);
+    customPath = customPath.replace("${workspaceFolder}", workspaceFolder.uri.fsPath);
+    customPath = path.normalize(customPath);
+    return customPath;
   }
   logger.appendLine(
     `Not running Vale on file '${file.uri}' as it is not contained within the workspace`
