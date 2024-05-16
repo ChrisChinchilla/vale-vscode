@@ -8,7 +8,7 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 
 ## Installation
 
-1. Install [Vale](https://docs.errata.ai/vale/install);
+1. Install [Vale](https://vale.sh/docs/vale-cli/installation/);
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
@@ -25,6 +25,8 @@ _In the future, the extension may provide a UI or other configuration options fo
 Browse detailed information for each alert, including the file location, style, and rule ID.
 
 ### Go-to rule
+
+**This feature is temporarily disabled due to changes in the Vale CLI. It will be re-enabled in the future.**
 
 ![Screenshot of go to rule interface](https://user-images.githubusercontent.com/8785025/89956857-d1635680-dbea-11ea-8e50-8e2715721e5d.png)
 

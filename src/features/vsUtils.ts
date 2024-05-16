@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as which from "which";
-import * as fs from "fs";
+// import * as fs from "fs";
 import { execFile } from "child_process";
 
 import * as vscode from "vscode";
@@ -12,10 +12,30 @@ function replaceWorkspaceFolder(
   customPath: string,
   file: vscode.TextDocument
 ): string | null {
-  customPath = path.normalize(customPath);
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(file.uri);
+
+  // Handle mutli-root workspace scenarios.
+  if (vscode.workspace.workspaceFolders) {
+    let replaced = false;
+    vscode.workspace.workspaceFolders.some(function (value, index, array) {
+      let searchStr = `\${workspaceFolder:${value.name}}`;
+      if (customPath.startsWith(searchStr)) {
+        // Handle workspace folder ${workspaceFolder:NAME} scenario
+        let newPath = customPath.replace(searchStr, value.uri.fsPath);
+        customPath = path.normalize(newPath);
+        replaced = true;
+        return true;
+      }
+      return false;
+    });
+    if (replaced) {
+      return customPath;
+    }
+  }
   if (workspaceFolder) {
-    return customPath.replace("${workspaceFolder}", workspaceFolder.uri.fsPath);
+    customPath = customPath.replace("${workspaceFolder}", workspaceFolder.uri.fsPath);
+    customPath = path.normalize(customPath);
+    return customPath;
   }
   logger.appendLine(
     `Not running Vale on file '${file.uri}' as it is not contained within the workspace`
@@ -132,7 +152,7 @@ export const isElligibleDocument = async (
  */
 export const toDiagnostic = (
   alert: IValeErrorJSON,
-  styles: string,
+  // styles: string,
   backend: string,
   offset: number
 ): vscode.Diagnostic => {
@@ -160,17 +180,17 @@ export const toDiagnostic = (
     diagnostic.code = alert.Check;
   }
 
-  const name = alert.Check.split(".");
-  const rule = vscode.Uri.file(path.join(styles, name[0], name[1] + ".yml"));
+  // const name = alert.Check.split(".");
+  // const rule = vscode.Uri.file(path.join(styles, name[0], name[1] + ".yml"));
 
-  if (fs.existsSync(rule.fsPath)) {
-    diagnostic.relatedInformation = [
-      new vscode.DiagnosticRelatedInformation(
-        new vscode.Location(rule, new vscode.Position(0, 0)),
-        "View rule"
-      ),
-    ];
-  }
+  // if (fs.existsSync(rule.fsPath)) {
+  //   diagnostic.relatedInformation = [
+  //     new vscode.DiagnosticRelatedInformation(
+  //       new vscode.Location(rule, new vscode.Position(0, 0)),
+  //       "View rule"
+  //     ),
+  //   ];
+  // }
   return diagnostic;
 };
 
