@@ -1,8 +1,7 @@
 # Vale + VS Code
 
 [![Publish Extension on tag](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml)
-
-> The Visual Studio Code extension for [Vale](https://github.com/chrischinchilla/vale).
+[![Sponsor Chris Chinchilla](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/chrischinchilla)
 
 The Vale extension for VS Code provides customizable spelling, style, and grammar checking for a variety of markup formats (Markdown, AsciiDoc, reStructuredText, HTML, and DITA).
 
@@ -11,6 +10,12 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 1. Install [Vale](https://vale.sh/docs/vale-cli/installation/);
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
+
+### Install pre-release
+
+_Want to test the pre-release version? Use the "Switch to Pre-Release Version" button on extension page in VSCode._
+
+The current pre-release version is `0.21.0` and switches to using the [Vale language server protocol (LSP)](https://github.com/errata-ai/vale-ls). Only basic problem highlighting works, but your help is appreciated in testing and providing feedback.
 
 ## Features
 
