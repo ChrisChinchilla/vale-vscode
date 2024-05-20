@@ -11,7 +11,7 @@ import {
 
 let client: LanguageClient;
 
-const TAG = "v0.3.5";
+const TAG = "v0.3.7";
 const URL =
   "https://github.com/errata-ai/vale-ls/releases/download/{tag}/vale-ls-{arch}-{platform}.zip";
 
