@@ -1,13 +1,12 @@
-import { platform } from "os";
-import * as path from "path";
 import { workspace, ExtensionContext } from "vscode";
 
 import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind,
-} from "vscode-languageclient/node";
+	LanguageClient,
+	LanguageClientOptions,
+	ServerOptions,
+	TransportKind
+} from 'vscode-languageclient/node';
+
 
 let client: LanguageClient;
 
@@ -28,46 +27,32 @@ export function getPlatform(): String {
 }
 
 export function activate(context: ExtensionContext) {
-  // The server is implemented in node
-  // let serverModule = context.asAbsolutePath(path.join('server', 'out', 'server.js'));
-  // The debug options for the server
-  // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
+  // Not possible when using `command`?
   // let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   const valePath = context.extensionPath + "/tmp-bin/vale-ls";
+  // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
   let valeArgs: never[] = [];
   // valeArgs.push('');
   console.log("Using  binary: " + valePath);
 
-  // If the extension is launched in debug mode then the debug server options are used
-  // Otherwise the run options are used
   let serverOptions: ServerOptions = {
     run: { command: valePath, args: valeArgs },
-    debug: { command: valePath, args: valeArgs },
+    debug: { command: valePath, args: valeArgs},
   };
-
-  // let serverOptions: ServerOptions = {
-  //   run: { module: serverModule, transport: TransportKind.ipc },
-  //   debug: {
-  //     module: serverModule,
-  //     transport: TransportKind.ipc,
-  //     options: debugOptions
-  //   }
-  // };
 
   // Options to control the language client
   let clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
+    // TODO: Refine
     documentSelector: [{ scheme: "file", language: "*" }],
     synchronize: {
-      // Notify the server about file changes to '.clientrc files contained in the workspace
       fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
     },
     };
 
   // Create the language client and start the client.
   client = new LanguageClient(
-    "valeVSCode",
-    "Vale VS Code extension",
+    "valevscode",
+    "Vale VSCode",
     serverOptions,
     clientOptions
   );
