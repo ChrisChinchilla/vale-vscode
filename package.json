@@ -9,7 +9,7 @@
     "email": "chris@chrischinchilla.com",
     "url": "https://github.com/chrischinchilla"
   },
-  "publisher": "chrischinchilla", 
+  "publisher": "chrischinchilla",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -31,27 +31,26 @@
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
-      
       "type": "object",
       "title": "Vale",
       "properties": {
-        "valevscode.maxNumberOfProblems": {
-					"scope": "resource",
-					"type": "number",
-					"default": 100,
-					"description": "Controls the maximum number of problems produced by the server."
-				},
-				"valevscode.trace.server": {
-					"scope": "window",
-					"type": "string",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"default": "off",
-					"description": "Traces the communication between VS Code and the language server."
-				},
+        "vale.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "vale.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        },
         "vale.valeCLI.config": {
           "scope": "resource",
           "type": "string",
@@ -110,7 +109,6 @@
       }
     }
   },
-  
   "scripts": {
     "vscode:prepublish": "webpack --mode production",
     "compile": "tsc -p ./",
@@ -148,5 +146,4 @@
     "which": "^4.0.0",
     "dictionary-en": "^4.0.0"
   }
-  
 }

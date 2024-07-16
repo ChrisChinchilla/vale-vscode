@@ -1,4 +1,5 @@
 import { workspace, ExtensionContext } from "vscode";
+import * as vscode from "vscode";
 
 import {
 	LanguageClient,
@@ -30,9 +31,18 @@ export function activate(context: ExtensionContext) {
   // Not possible when using `command`?
   // let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   const valePath = context.extensionPath + "/tmp-bin/vale-ls";
+  let valeArgs: any = new Object();
+
   // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
-  let valeArgs: never[] = [];
-  // valeArgs.push('');
+  // Has the user defined a config file manually?
+  const configuration = vscode.workspace.getConfiguration();
+  let customConfigPath = configuration.get<string>("vale.valeCLI.config");
+  if (customConfigPath) {
+    console.log("Using config: " + customConfigPath);
+
+  valeArgs = {configPath: customConfigPath};
+  }
+console.log(valeArgs)
   console.log("Using  binary: " + valePath);
 
   let serverOptions: ServerOptions = {
@@ -51,7 +61,7 @@ export function activate(context: ExtensionContext) {
 
   // Create the language client and start the client.
   client = new LanguageClient(
-    "valevscode",
+    "vale",
     "Vale VSCode",
     serverOptions,
     clientOptions
