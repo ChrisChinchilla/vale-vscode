@@ -18,9 +18,9 @@
   "sponsor": {
     "url": "https://github.com/sponsors/ChrisChinchilla"
   },
-  "version": "0.21.0",
+  "version": "0.23.1",
   "engines": {
-    "vscode": "^1.89.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Linters"
@@ -51,12 +51,31 @@
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
         },
-        "vale.valeCLI.config": {
+        "vale.valeCLI.configPath": {
           "scope": "resource",
           "type": "string",
           "default": null,
           "description": "Absolute path to a Vale config file. If not specified, the default search process will be used (relative to the current file)."
         },
+        "vale.valeCLI.syncOnStartup": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Runs `vale sync` upon starting the language server"
+        },
+        "vale.valeCLI.filter": {
+          "scope": "resource",
+          "type": "string",
+          "default": null,
+          "description": "An output filter to apply when calling Vale."
+        },
+        "vale.valeCLI.installVale": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user’s $PATH."
+        },
+        
         "vale.valeCLI.path": {
           "scope": "resource",
           "type": "string",
