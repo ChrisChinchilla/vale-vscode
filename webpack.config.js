@@ -3,8 +3,6 @@
 "use strict";
 
 const path = require("path");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
-
 
 /**
  @type {import('webpack').Configuration}
@@ -47,13 +45,5 @@ const config = {
       },
     ],
   },
-  plugins: [
-    new CopyWebpackPlugin({
-      patterns: [
-        path.resolve(__dirname, "node_modules", "dictionary-en", "index.aff"),
-        path.resolve(__dirname, "node_modules", "dictionary-en", "index.dic"),
-      ]
-    })
-  ]
 };
 module.exports = config;
