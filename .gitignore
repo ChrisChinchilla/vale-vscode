@@ -3,3 +3,6 @@ dist
 node_modules
 .vscode-test/
 *.vsix
+vale-ls
+vale_bin
+.DS_Store
