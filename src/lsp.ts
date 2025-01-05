@@ -14,14 +14,12 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient;
-let downloadLs = true;
 
 export function getArch(): String | null {
   if (process.arch == "x64") return "x86_64";
   if (process.arch == "arm64") return "aarch64";
   else {
     vscode.window.showErrorMessage("Unsupported architecture: " + process.arch);
-    downloadLs = false;
     return null;
   }
 }
@@ -32,43 +30,41 @@ export function getPlatform(): String | null {
   if (process.platform == "linux") return "unknown-linux-gnu";
   else {
     vscode.window.showErrorMessage("Unsupported platform: " + process.platform);
-    downloadLs = false;
     return null;
   }
 }
 
-async function downloadLSP(context: ExtensionContext) {
+async function downloadLSP(context: ExtensionContext): Promise<void> {
   const TAG = "v0.3.8";
   const URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
   const extStorage = context.extensionPath;
   const tmpZip = path.join(extStorage, "vale-ls.zip");
 
-  vscode.window.showInformationMessage(
-    "First launch: Downloading Vale Language Server"
-  );
+  try {
+    vscode.window.showInformationMessage(
+      "First launch: Downloading Vale Language Server"
+    );
 
-  const response = await fetch(URL);
-  if (response.body) {
+    const response = await fetch(URL);
+    if (!response.body) {
+      throw new Error("Failed to fetch the response body.");
+    }
+
     const stream = Readable.fromWeb(response.body);
-    await writeFile(tmpZip, stream).then(async () => {
-      // console.log("Downloaded to " + tmpZip);
-      await unzipper.Open.file(tmpZip).then((directory) => {
-        // console.log("Extracting to " + extStorage);
-        directory
-          .extract({ path: extStorage })
-          .then(async () => {
-            fs.chmodSync(path.join(extStorage, "vale-ls"), 766);
-          })
-          .finally(() => {
-            fs.unlinkSync(tmpZip);
-            vscode.window.showInformationMessage(
-              "First launch: Vale Language Server downloaded"
-            );
-          });
-      });
-    });
-  } else {
-    throw new Error("Failed to fetch the response body.");
+    await writeFile(tmpZip, stream);
+
+    const directory = await unzipper.Open.file(tmpZip);
+    await directory.extract({ path: extStorage });
+
+    await fs.promises.chmod(path.join(extStorage, "vale-ls"), 0o755);
+    await fs.promises.unlink(tmpZip);
+
+    vscode.window.showInformationMessage(
+      "First launch: Vale Language Server downloaded"
+    );
+  } catch (error) {
+    console.error("Download failed:", error);
+    throw error;
   }
 }
 
@@ -83,98 +79,94 @@ interface valeArgs {
 }
 
 export async function activate(context: ExtensionContext) {
-  // TODO: Always needs reload on first activate
   const filePath = path.join(context.extensionPath, "vale-ls");
-  console.log(filePath);
+
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-    console.log("File exists");
+    console.log("Language server exists");
   } catch {
-    console.log("File doesn't exist");
+    console.log("Language server not found, downloading...");
+    await downloadLSP(context);
 
-    await vscode.workspace.fs
-      .createDirectory(context.globalStorageUri)
-      .then(async () => {
-        await downloadLSP(context);
-      });
-  } finally {
-    const valePath = path.join(context.extensionPath, "vale-ls");
-    // TODO: Must be a better way?
-    var escapedPath = valePath.replace(/(\s)/, "\\ ");
+    // Verify download succeeded
+    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+  }
 
-    // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
-    // Has the user defined a config file manually?
-    const configuration = vscode.workspace.getConfiguration();
-    // Make global constant for now as will reuse and build upon later
-    let valeFilter: valeArgs = { value: "" };
-    let filters: string[] = [];
+  console.log("Starting language server");
+  const valePath = path.join(context.extensionPath, "vale-ls");
+  // TODO: Must be a better way?
+  var escapedPath = valePath.replace(/(\s)/, "\\ ");
 
-    // console.log("Using  binary: " + escapedPath);
+  // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
+  // Has the user defined a config file manually?
+  const configuration = vscode.workspace.getConfiguration();
+  // Make global constant for now as will reuse and build upon later
+  let valeFilter: valeArgs = { value: "" };
+  let filters: string[] = [];
 
-    // Handle old minAlertLevel to output as filter
-    if (configuration.get("vale.valeCLI.minAlertLevel") !== "inherited") {
-      let minAlertLevel = configuration.get("vale.valeCLI.minAlertLevel");
+  // Handle old minAlertLevel to output as filter
+  if (configuration.get("vale.valeCLI.minAlertLevel") !== "inherited") {
+    let minAlertLevel = configuration.get("vale.valeCLI.minAlertLevel");
 
-      if (minAlertLevel === "suggestion") {
-        filters.push(`.Level in ["suggestion", "warning", "error"]`);
-      }
-      if (minAlertLevel === "warning") {
-        filters.push(`.Level in ["warning", "error"]`);
-      }
-      if (minAlertLevel === "error") {
-        filters.push(`.Level in ["error"]`);
-      }
+    if (minAlertLevel === "suggestion") {
+      filters.push(`.Level in ["suggestion", "warning", "error"]`);
     }
-
-    // Handle old enableSpellcheck to output as filter
-    if (configuration.get("vale.enableSpellcheck") === false) {
-      filters.push(`.Extends != "spelling"`);
+    if (minAlertLevel === "warning") {
+      filters.push(`.Level in ["warning", "error"]`);
     }
-
-    // Create combined filters
-    if (filters.length > 0) {
-      valeFilter = filters.join(" and ") as unknown as valeArgs;
+    if (minAlertLevel === "error") {
+      filters.push(`.Level in ["error"]`);
     }
+  }
 
-    let valeConfig: Record<valeConfigOptions, valeArgs> = {
-      configPath: configuration.get("vale.valeCLI.configPath") as valeArgs,
-      syncOnStartup: configuration.get(
-        "vale.valeCLI.syncOnStartup"
-      ) as valeArgs,
-      filter: valeFilter as unknown as valeArgs,
-      installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
-    };
-    // console.log(valeConfig);
-    // TODO: So do I need the below?
-    let tempArgs: never[] = [];
-    let serverOptions: ServerOptions = {
-      run: { command: escapedPath, args: tempArgs },
-      debug: { command: escapedPath, args: tempArgs },
-    };
+  // Handle old enableSpellcheck to output as filter
+  if (configuration.get("vale.enableSpellcheck") === false) {
+    filters.push(`.Extends != "spelling"`);
+  }
 
-    // Options to control the language client
-    let clientOptions: LanguageClientOptions = {
-      // TODO: Refine
-      initializationOptions: valeConfig,
-      documentSelector: [{ scheme: "file", language: "*" }],
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
-      },
-    };
+  // Create combined filters
+  if (filters.length > 0) {
+    valeFilter = filters.join(" and ") as unknown as valeArgs;
+  }
 
-    // Create the language client and start the client.
-    client = new LanguageClient(
-      "vale",
-      "Vale VSCode",
-      serverOptions,
-      clientOptions
-    );
+  let valeConfig: Record<valeConfigOptions, valeArgs> = {
+    configPath: configuration.get("vale.valeCLI.configPath") as valeArgs,
+    syncOnStartup: configuration.get("vale.valeCLI.syncOnStartup") as valeArgs,
+    filter: valeFilter as unknown as valeArgs,
+    installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
+  };
 
-    // Start the client. This will also launch the server
-    await client.start().catch((err) => {
-      console.error(err);
-      vscode.window.showErrorMessage("Failed to start Vale Language Server");
-    });
+  // TODO: So do I need the below?
+  let tempArgs: never[] = [];
+  let serverOptions: ServerOptions = {
+    run: { command: escapedPath, args: tempArgs },
+    debug: { command: escapedPath, args: tempArgs },
+  };
+
+  // Options to control the language client
+  let clientOptions: LanguageClientOptions = {
+    // TODO: Refine
+    initializationOptions: valeConfig,
+    documentSelector: [{ scheme: "file", language: "*" }],
+    synchronize: {
+      fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
+    },
+  };
+
+  // Create the language client and start the client.
+  client = new LanguageClient(
+    "vale",
+    "Vale VSCode",
+    serverOptions,
+    clientOptions
+  );
+  
+  try {
+    await client.start();
+  } catch (err) {
+    console.error(err);
+    vscode.window.showErrorMessage("Failed to start Vale Language Server");
+    throw err;
   }
 }
 
