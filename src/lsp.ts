@@ -26,7 +26,10 @@ export function getArch(): String | null {
 
 export function getPlatform(): String | null {
   if (process.platform == "darwin") return "apple-darwin";
-  if (process.platform == "win32") return "pc-windows-gnu";
+  if (process.arch == "arm64" && process.platform == "win32")
+    return "pc-windows-msvc";
+  if (process.arch == "x64" && process.platform == "win32")
+    return "pc-windows-gnu";
   if (process.platform == "linux") return "unknown-linux-gnu";
   else {
     vscode.window.showErrorMessage("Unsupported platform: " + process.platform);
@@ -35,8 +38,13 @@ export function getPlatform(): String | null {
 }
 
 async function downloadLSP(context: ExtensionContext): Promise<void> {
-  const TAG = "v0.3.8";
-  const URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
+  const TAG = "v0.4.0";
+  let URL: string;
+  if (getArch() == "arm64" && getPlatform() == "win32") {
+    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-aarch64-pc-windows-msvc.zip`;
+  } else {
+    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
+  }
   const extStorage = context.extensionPath;
   const tmpZip = path.join(extStorage, "vale-ls.zip");
 
@@ -55,8 +63,13 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
 
     const directory = await unzipper.Open.file(tmpZip);
     await directory.extract({ path: extStorage });
-
-    await fs.promises.chmod(path.join(extStorage, "vale-ls"), 0o755);
+    // Handle Windows
+    // TODO: Is there a better way to handle this?
+    if (process.platform === "win32") {
+      await fs.promises.chmod(path.join(extStorage, "vale-ls.exe"), 0o755);
+    } else {
+      await fs.promises.chmod(path.join(extStorage, "vale-ls"), 0o755);
+    }
     await fs.promises.unlink(tmpZip);
 
     vscode.window.showInformationMessage(
@@ -79,8 +92,13 @@ interface valeArgs {
 }
 
 export async function activate(context: ExtensionContext) {
-  const filePath = path.join(context.extensionPath, "vale-ls");
+  let filePath = path.join(context.extensionPath, "vale-ls");
 
+  // Handle Windows
+  // TODO: Is there a better way to handle this?
+  if (process.platform === "win32") {
+    filePath = path.join(context.extensionPath, "vale-ls.exe");
+  }
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
     console.log("Language server exists");
@@ -160,7 +178,7 @@ export async function activate(context: ExtensionContext) {
     serverOptions,
     clientOptions
   );
-  
+
   try {
     await client.start();
   } catch (err) {
