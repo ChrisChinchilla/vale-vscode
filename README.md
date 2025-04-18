@@ -10,7 +10,7 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 
 There are issues I know about with this switch. But I have been sitting on this for so long I wanted to release it and will fix soon™️.
 
-**If the extension is unable while I fix those features, then the old pre-LSP version is still available as the pre-release version (v0.21.0) of the extension.**
+**If the extension is unusable while I fix those features, then the old pre-LSP version is still available as the pre-release version (v0.25.1), [pre-lsp branch](https://github.com/ChrisChinchilla/vale-vscode/tree/chrischinch/pre-lsp) of the extension.**
 
 > [!NOTE]
 > This new release uses the [Vale Language Server](https://github.com/errata-ai/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
