@@ -15,7 +15,7 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 
 _Want to test the pre-release version? Use the "Switch to Pre-Release Version" button on extension page in VSCode._
 
-The current pre-release version is `0.21.0` and switches to using the [Vale language server protocol (LSP)](https://github.com/errata-ai/vale-ls). Only basic problem highlighting works, but your help is appreciated in testing and providing feedback.
+The current pre-release version is `0.25.1` and uses the old pre LSP implementation for those who experience too many issues with the new version.
 
 ## Features
 
