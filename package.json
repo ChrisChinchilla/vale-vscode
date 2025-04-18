@@ -18,9 +18,10 @@
   "sponsor": {
     "url": "https://github.com/sponsors/ChrisChinchilla"
   },
-  "version": "0.20.0",
+  "version": "0.30.0",
   "engines": {
-    "vscode": "^1.88.0"
+    "vscode": "^1.99.1",
+    "node": ">=20 <=22.11"
   },
   "categories": [
     "Linters"
@@ -34,17 +35,46 @@
       "type": "object",
       "title": "Vale",
       "properties": {
+        "vale.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "vale.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        },
         "vale.valeCLI.config": {
           "scope": "resource",
           "type": "string",
           "default": null,
-          "description": "Absolute path to a Vale config file. If not specified, the default search process will be used (relative to the current file)."
+          "description": "Absolute path to a Vale config file. If not specified, the default search process is used (relative to the current file)."
         },
-        "vale.valeCLI.path": {
+        "vale.valeCLI.syncOnStartup": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Runs `vale sync` upon starting the language server"
+        },
+        "vale.valeCLI.filter": {
           "scope": "resource",
           "type": "string",
           "default": null,
-          "markdownDescription": "Absolute path to the Vale binary. The predefined [`${workspaceFolder}`](https://code.visualstudio.com/docs/editor/variables-reference#_predefined-variables) variable can be used to reference a non-global binary. (**NOTE**: On Windows you can use '/' and can omit `.cmd` in the path value.)"
+          "description": "An output filter to apply when calling Vale."
+        },
+        "vale.valeCLI.installVale": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user's $PATH. And you need an accessible .vale.ini. file."
         },
         "vale.valeCLI.minAlertLevel": {
           "scope": "resource",
@@ -103,29 +133,25 @@
     "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^20.12.12",
-    "@types/nspell": "^2.1.6",
-    "@types/vscode": "^1.89.0",
-    "@types/which": "^3.0.3",
-    "@typescript-eslint/eslint-plugin": "^8.0.0-alpha.14",
-    "@typescript-eslint/parser": "^8.0.0-alpha.14",
-    "copy-webpack-plugin": "^12.0.2",
-    "eslint": "^9.3.0",
-    "glob": "^10.3.15",
-    "mocha": "^10.4.0",
-    "rxjs": "^7.8.1",
-    "ts-loader": "^9.5.1",
+    "@aws-sdk/client-s3": "^3.787.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.14.1",
+    "@types/unzipper": "^0.10.11",
+    "@types/vscode": "^1.99.1",
+    "@types/which": "^3.0.4",
+    "@typescript-eslint/eslint-plugin": "^8.30.1",
+    "@typescript-eslint/parser": "^8.30.1",
+    "eslint": "^9.24.0",
+    "mocha": "^11.1.0",
+    "ts-loader": "^9.5.2",
     "tslint": "^6.1.3",
-    "typescript": "^5.4.5",
+    "typescript": "^5.8.3",
+    "unzipper": "~0.12.3",
     "vscode-test": "^1.6.1",
-    "webpack": "^5.91.0",
-    "webpack-cli": "^5.1.4"
+    "webpack": "^5.99.5",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "fs": "0.0.1-security",
-    "nspell": "^2.1.5",
-    "which": "^4.0.0",
-    "dictionary-en": "^4.0.0"
+    "vscode-languageclient": "^9.0.1"
   }
 }

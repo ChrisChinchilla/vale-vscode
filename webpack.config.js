@@ -3,8 +3,6 @@
 "use strict";
 
 const path = require("path");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
-
 
 /**
  @type {import('webpack').Configuration}
@@ -14,7 +12,7 @@ const config = {
   node: {
     __dirname: false,
   },
-  entry: "./src/extension.ts", // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
+  entry: "./src/lsp.ts", // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
   output: {
     // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
     path: path.resolve(__dirname, "dist"),
@@ -47,13 +45,5 @@ const config = {
       },
     ],
   },
-  plugins: [
-    new CopyWebpackPlugin({
-      patterns: [
-        path.resolve(__dirname, "node_modules", "dictionary-en", "index.aff"),
-        path.resolve(__dirname, "node_modules", "dictionary-en", "index.dic"),
-      ]
-    })
-  ]
 };
 module.exports = config;
