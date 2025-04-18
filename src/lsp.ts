@@ -143,14 +143,16 @@ export async function activate(context: ExtensionContext) {
   }
 
   // Create combined filters
+  // TODO: Test with multiple filters
   if (filters.length > 0) {
     valeFilter = filters.join(" and ") as unknown as valeArgs;
   }
 
   let valeConfig: Record<valeConfigOptions, valeArgs> = {
-    configPath: configuration.get("vale.valeCLI.configPath") as valeArgs,
+    configPath: configuration.get("vale.valeCLI.config") as valeArgs,
     syncOnStartup: configuration.get("vale.valeCLI.syncOnStartup") as valeArgs,
     filter: valeFilter as unknown as valeArgs,
+    // TODO: Build into proper onboarding
     installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
   };
 

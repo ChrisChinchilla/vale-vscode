@@ -18,9 +18,9 @@
   "sponsor": {
     "url": "https://github.com/sponsors/ChrisChinchilla"
   },
-  "version": "0.23.7",
+  "version": "0.30.0",
   "engines": {
-    "vscode": "^1.98.0",
+    "vscode": "^1.99.1",
     "node": ">=20 <=22.11"
   },
   "categories": [
@@ -52,11 +52,11 @@
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
         },
-        "vale.valeCLI.configPath": {
+        "vale.valeCLI.config": {
           "scope": "resource",
           "type": "string",
           "default": null,
-          "description": "Absolute path to a Vale config file. If not specified, the default search process will be used (relative to the current file)."
+          "description": "Absolute path to a Vale config file. If not specified, the default search process is used (relative to the current file)."
         },
         "vale.valeCLI.syncOnStartup": {
           "scope": "resource",
@@ -74,13 +74,7 @@
           "scope": "resource",
           "type": "boolean",
           "default": false,
-          "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user’s $PATH."
-        },
-        "vale.valeCLI.path": {
-          "scope": "resource",
-          "type": "string",
-          "default": null,
-          "markdownDescription": "Absolute path to the Vale binary. The predefined [`${workspaceFolder}`](https://code.visualstudio.com/docs/editor/variables-reference#_predefined-variables) variable can be used to reference a non-global binary. (**NOTE**: On Windows you can use '/' and can omit `.cmd` in the path value.)"
+          "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user's $PATH. And you need an accessible .vale.ini. file."
         },
         "vale.valeCLI.minAlertLevel": {
           "scope": "resource",
@@ -139,22 +133,22 @@
     "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.772.0",
+    "@aws-sdk/client-s3": "^3.787.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.13.11",
+    "@types/node": "^22.14.1",
     "@types/unzipper": "^0.10.11",
-    "@types/vscode": "^1.98.0",
+    "@types/vscode": "^1.99.1",
     "@types/which": "^3.0.4",
-    "@typescript-eslint/eslint-plugin": "^8.27.0",
-    "@typescript-eslint/parser": "^8.27.0",
-    "eslint": "^9.22.0",
+    "@typescript-eslint/eslint-plugin": "^8.30.1",
+    "@typescript-eslint/parser": "^8.30.1",
+    "eslint": "^9.24.0",
     "mocha": "^11.1.0",
     "ts-loader": "^9.5.2",
     "tslint": "^6.1.3",
-    "typescript": "^5.8.2",
+    "typescript": "^5.8.3",
     "unzipper": "~0.12.3",
     "vscode-test": "^1.6.1",
-    "webpack": "^5.98.0",
+    "webpack": "^5.99.5",
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
