@@ -17,7 +17,7 @@ let client: LanguageClient;
 
 export function getArch(): String | null {
   if (process.arch == "x64") return "x86_64";
-  if (process.arch == "arm64") return "aarch64";
+  else if (process.arch == "arm64") return "aarch64";
   else {
     vscode.window.showErrorMessage("Unsupported architecture: " + process.arch);
     return null;
@@ -26,11 +26,11 @@ export function getArch(): String | null {
 
 export function getPlatform(): String | null {
   if (process.platform == "darwin") return "apple-darwin";
-  if (process.arch == "arm64" && process.platform == "win32")
+  else if (process.arch == "arm64" && process.platform == "win32")
     return "pc-windows-msvc";
-  if (process.arch == "x64" && process.platform == "win32")
+  else if (process.arch == "x64" && process.platform == "win32")
     return "pc-windows-gnu";
-  if (process.platform == "linux") return "unknown-linux-gnu";
+  else if (process.platform == "linux") return "unknown-linux-gnu";
   else {
     vscode.window.showErrorMessage("Unsupported platform: " + process.platform);
     return null;
