@@ -148,8 +148,26 @@ export async function activate(context: ExtensionContext) {
     valeFilter = filters.join(" and ") as unknown as valeArgs;
   }
 
+  // Get the config path as a string
+  let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
+
+  // Resolve workspace folder
+  let resolvedConfigPath = configPathRaw;
+  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+
+    if (configPathRaw.includes("${workspaceFolder}")) {
+      resolvedConfigPath = configPathRaw.replace(/\$\{workspaceFolder\}/g, workspaceRoot);
+    } else if (
+      configPathRaw.startsWith("./") ||
+      (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
+    ) {
+      resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
+    }
+  }
+
   let valeConfig: Record<valeConfigOptions, valeArgs> = {
-    configPath: configuration.get("vale.valeCLI.config") as valeArgs,
+    configPath: { value: resolvedConfigPath } as valeArgs,
     syncOnStartup: configuration.get("vale.valeCLI.syncOnStartup") as valeArgs,
     filter: valeFilter as unknown as valeArgs,
     // TODO: Build into proper onboarding
