@@ -56,7 +56,7 @@
           "scope": "resource",
           "type": "string",
           "default": null,
-          "description": "Absolute path to a Vale config file. If not specified, the default search process is used (relative to the current file)."
+          "description": "Absolute or relative path to a Vale config file. If not specified, the default search process is used (relative to the current file)."
         },
         "vale.valeCLI.syncOnStartup": {
           "scope": "resource",
