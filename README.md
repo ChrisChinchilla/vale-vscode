@@ -64,7 +64,7 @@ The extension doesn't support adding words to dictionaries. For now, the best op
 
 The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale_).
 
-- `vale.valeCLI.config` (default: `null`): Absolute path to a Vale configuration file.
+- `vale.valeCLI.config` (default: `null`): Absolute or relative path to a Vale configuration file.
 - `vale.valeCLI.minAlertLevel` (default: `inherited`): Defines from which level of errors and above to display in the problems view.
 - `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): Toggle display of warning dialog that you must save a file before Vale lints it.
 - `vale.readabilityProblemLocation` (default: `status`): If you have any `Readability` or `metric` styles, the extension can display the readability score in the status bar, the problems view, or both.
