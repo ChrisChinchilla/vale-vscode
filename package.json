@@ -18,9 +18,9 @@
   "sponsor": {
     "url": "https://github.com/sponsors/ChrisChinchilla"
   },
-  "version": "0.30.1",
+  "version": "0.30.2",
   "engines": {
-    "vscode": "^1.100.0",
+    "vscode": "^1.102.0",
     "node": ">=20 <=22.11"
   },
   "categories": [
@@ -133,22 +133,22 @@
     "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.820.0",
+    "@aws-sdk/client-s3": "^3.848.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.15.27",
+    "@types/node": "^24.0.15",
     "@types/unzipper": "^0.10.11",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.102.0",
     "@types/which": "^3.0.4",
-    "@typescript-eslint/eslint-plugin": "^8.33.0",
-    "@typescript-eslint/parser": "^8.33.0",
-    "eslint": "^9.27.0",
-    "mocha": "^11.5.0",
+    "@typescript-eslint/eslint-plugin": "^8.37.0",
+    "@typescript-eslint/parser": "^8.37.0",
+    "eslint": "^9.31.0",
+    "mocha": "^11.7.1",
     "ts-loader": "^9.5.2",
     "tslint": "^6.1.3",
     "typescript": "^5.8.3",
     "unzipper": "~0.12.3",
     "vscode-test": "^1.6.1",
-    "webpack": "^5.99.9",
+    "webpack": "^5.100.2",
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
