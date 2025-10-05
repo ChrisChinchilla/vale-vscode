@@ -1,12 +1,11 @@
-name: Releases
+name: Pre-Releases
 
 on:
   push:
     tags:
-      - '*'
-      - '!*-alpha*'
-      - '!*-beta*'
-      - '!*-rc*'
+      - '*-alpha*'
+      - '*-beta*'
+      - '*-rc*'
 
 jobs:
 
@@ -19,3 +18,4 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           generateReleaseNotes: true
+          prerelease: true
