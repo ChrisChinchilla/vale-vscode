@@ -92,6 +92,16 @@ interface valeArgs {
 }
 
 export async function activate(context: ExtensionContext) {
+  // Prevent multiple activations - stop existing client if present
+  if (client) {
+    console.log("Vale language client already active, stopping existing client");
+    try {
+      await client.stop();
+    } catch (error) {
+      console.error("Error stopping existing client:", error);
+    }
+  }
+
   let filePath = path.join(context.extensionPath, "vale-ls");
 
   // Handle Windows
@@ -214,9 +224,15 @@ export async function activate(context: ExtensionContext) {
   }
 }
 
-export function deactivate(): Thenable<void> | undefined {
+export async function deactivate(): Promise<void> {
   if (!client) {
-    return undefined;
+    return;
   }
-  return client.stop();
+
+  try {
+    await client.stop();
+    console.log("Vale language server stopped");
+  } catch (error) {
+    console.error("Error stopping Vale language server:", error);
+  }
 }
