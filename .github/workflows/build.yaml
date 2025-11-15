@@ -1,26 +1,25 @@
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-    - name: Install global dependencies
-      run: npm install -g typescript vsce
-    - name: npm-ci
-      run: npm ci
-    - name: npm-compile
-      run: npm run compile
-    - name: vsce package
-      run: vsce package
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install global dependencies
+        run: npm install -g typescript @vscode/vsce
+      - name: npm-ci
+        run: npm ci
+      - name: npm-compile
+        run: npm run compile
+      - name: vsce package
+        run: vsce package
