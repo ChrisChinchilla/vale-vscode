@@ -118,8 +118,38 @@
           "type": "boolean",
           "default": false,
           "description": "Enable spell checking with Vale."
+        },
+        "vale.vocabPath": {
+          "scope": "resource",
+          "type": "string",
+          "default": null,
+          "description": "Path to the Vale vocabulary folder (relative to StylesPath). Example: 'MyVocab' will create vocabularies at <StylesPath>/config/vocabularies/MyVocab/"
         }
       }
+    },
+    "commands": [
+      {
+        "command": "vale.addToAcceptList",
+        "title": "Vale: Add to Accept List"
+      },
+      {
+        "command": "vale.addToRejectList",
+        "title": "Vale: Add to Reject List"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vale.addToAcceptList",
+          "group": "vale@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "vale.addToRejectList",
+          "group": "vale@2",
+          "when": "editorHasSelection"
+        }
+      ]
     }
   },
   "scripts": {
