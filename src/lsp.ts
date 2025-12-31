@@ -234,33 +234,19 @@ export async function activate(context: ExtensionContext) {
     throw err;
   }
 
-  // Register vale.sync command
-  const syncCommand = vscode.commands.registerCommand('vale.sync', async () => {
+  // Helper function to run vale sync
+  const runValeSync = async () => {
     try {
       vscode.window.showInformationMessage('Vale: Running sync...');
-      
-      // Get the workspace folder
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceFolder) {
-        vscode.window.showErrorMessage('Vale: No workspace folder found');
-        return;
-      }
 
-      // Get the config path if specified
-      const configuration = vscode.workspace.getConfiguration();
-      let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
-      
-      // Resolve config path using helper function
-      const resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceFolder);
+      // Use workspace folder or current working directory
+      const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
-      // Execute vale sync using spawn for security
-      const valeArgs = resolvedConfigPath 
-        ? ['--config', resolvedConfigPath, 'sync']
-        : ['sync'];
-
+      // Vale will find its config automatically, just run sync
       await new Promise<void>((resolve, reject) => {
-        const valeProcess = spawn('vale', valeArgs, {
-          cwd: workspaceFolder
+        const valeProcess = spawn('vale', ['sync'], {
+          cwd: workingDir,
+          shell: true
         });
 
         let stdout = '';
@@ -299,9 +285,17 @@ export async function activate(context: ExtensionContext) {
       const errorMessage = error.message || String(error);
       vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
     }
-  });
+  };
+
+  // Register vale.sync command
+  const syncCommand = vscode.commands.registerCommand('vale.sync', runValeSync);
 
   context.subscriptions.push(syncCommand);
+
+  // Run sync on startup if enabled
+  if (configuration.get("vale.valeCLI.syncOnStartup")) {
+    await runValeSync();
+  }
 }
 
 export async function deactivate(): Promise<void> {
