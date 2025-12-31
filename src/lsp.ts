@@ -229,6 +229,27 @@ async function addToVocabulary(
   );
 }
 
+function resolveConfigPath(
+  configPathRaw: string,
+  workspaceRoot: string
+): string {
+  let resolvedConfigPath = configPathRaw;
+
+  if (configPathRaw.includes("${workspaceFolder}")) {
+    resolvedConfigPath = configPathRaw.replace(
+      /\$\{workspaceFolder\}/g,
+      workspaceRoot
+    );
+  } else if (
+    configPathRaw.startsWith("./") ||
+    (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
+  ) {
+    resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
+  }
+
+  return resolvedConfigPath;
+}
+
 export async function activate(context: ExtensionContext) {
   // Prevent multiple activations - stop existing client if present
   if (client) {
@@ -306,18 +327,7 @@ export async function activate(context: ExtensionContext) {
     vscode.workspace.workspaceFolders.length > 0
   ) {
     const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
-
-    if (configPathRaw.includes("${workspaceFolder}")) {
-      resolvedConfigPath = configPathRaw.replace(
-        /\$\{workspaceFolder\}/g,
-        workspaceRoot
-      );
-    } else if (
-      configPathRaw.startsWith("./") ||
-      (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
-    ) {
-      resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
-    }
+    resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
   }
 
   let valeConfig: Record<valeConfigOptions, valeArgs> = {
@@ -440,7 +450,68 @@ export async function activate(context: ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(addToAcceptCommand, addToRejectCommand);
+  // Helper function to run vale sync
+  const runValeSync = async () => {
+    try {
+      vscode.window.showInformationMessage('Vale: Running sync...');
+
+      // Use workspace folder or current working directory
+      const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+
+      // Vale will find its config automatically, just run sync
+      await new Promise<void>((resolve, reject) => {
+        const valeProcess = spawn('vale', ['sync'], {
+          cwd: workingDir,
+          shell: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        valeProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        valeProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        valeProcess.on('error', (error) => {
+          reject(error);
+        });
+
+        valeProcess.on('close', (code) => {
+          if (code === 0) {
+            if (stdout.trim()) {
+              console.log('Vale sync output:', stdout);
+            }
+            if (stderr) {
+              console.error('Vale sync stderr:', stderr);
+            }
+            resolve();
+          } else {
+            reject(new Error(`Vale sync exited with code ${code}: ${stderr}`));
+          }
+        });
+      });
+
+      vscode.window.showInformationMessage('Vale: Sync completed successfully');
+    } catch (error: any) {
+      console.error('Vale sync failed:', error);
+      const errorMessage = error.message || String(error);
+      vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
+    }
+  };
+
+  // Register vale.sync command
+  const syncCommand = vscode.commands.registerCommand('vale.sync', runValeSync);
+
+  context.subscriptions.push(addToAcceptCommand, addToRejectCommand, syncCommand);
+
+  // Run sync on startup if enabled
+  if (configuration.get("vale.valeCLI.syncOnStartup")) {
+    await runValeSync();
+  }
 }
 
 export async function deactivate(): Promise<void> {
