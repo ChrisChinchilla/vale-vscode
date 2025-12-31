@@ -92,6 +92,27 @@ interface valeArgs {
   value: string;
 }
 
+function resolveConfigPath(
+  configPathRaw: string,
+  workspaceRoot: string
+): string {
+  let resolvedConfigPath = configPathRaw;
+  
+  if (configPathRaw.includes("${workspaceFolder}")) {
+    resolvedConfigPath = configPathRaw.replace(
+      /\$\{workspaceFolder\}/g,
+      workspaceRoot
+    );
+  } else if (
+    configPathRaw.startsWith("./") ||
+    (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
+  ) {
+    resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
+  }
+  
+  return resolvedConfigPath;
+}
+
 export async function activate(context: ExtensionContext) {
   // Prevent multiple activations - stop existing client if present
   if (client) {
@@ -169,18 +190,7 @@ export async function activate(context: ExtensionContext) {
     vscode.workspace.workspaceFolders.length > 0
   ) {
     const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
-
-    if (configPathRaw.includes("${workspaceFolder}")) {
-      resolvedConfigPath = configPathRaw.replace(
-        /\$\{workspaceFolder\}/g,
-        workspaceRoot
-      );
-    } else if (
-      configPathRaw.startsWith("./") ||
-      (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
-    ) {
-      resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
-    }
+    resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
   }
 
   let valeConfig: Record<valeConfigOptions, valeArgs> = {
@@ -240,19 +250,8 @@ export async function activate(context: ExtensionContext) {
       const configuration = vscode.workspace.getConfiguration();
       let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
       
-      // Resolve config path
-      let resolvedConfigPath = configPathRaw;
-      if (configPathRaw.includes("${workspaceFolder}")) {
-        resolvedConfigPath = configPathRaw.replace(
-          /\$\{workspaceFolder\}/g,
-          workspaceFolder
-        );
-      } else if (
-        configPathRaw.startsWith("./") ||
-        (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
-      ) {
-        resolvedConfigPath = path.join(workspaceFolder, configPathRaw);
-      }
+      // Resolve config path using helper function
+      const resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceFolder);
 
       // Execute vale sync using spawn for security
       const valeArgs = resolvedConfigPath 
@@ -281,7 +280,9 @@ export async function activate(context: ExtensionContext) {
 
         valeProcess.on('close', (code) => {
           if (code === 0) {
-            console.log('Vale sync output:', stdout);
+            if (stdout.trim()) {
+              console.log('Vale sync output:', stdout);
+            }
             if (stderr) {
               console.error('Vale sync stderr:', stderr);
             }
