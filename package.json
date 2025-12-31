@@ -31,6 +31,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "vale.sync",
+        "title": "Vale: Sync"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "Vale",

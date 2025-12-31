@@ -6,12 +6,16 @@ import { Readable } from "node:stream";
 import * as unzipper from "unzipper";
 import fs from "fs";
 import * as path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
 } from "vscode-languageclient/node";
+
+const execAsync = promisify(exec);
 
 let client: LanguageClient;
 
@@ -222,6 +226,60 @@ export async function activate(context: ExtensionContext) {
     vscode.window.showErrorMessage("Failed to start Vale Language Server");
     throw err;
   }
+
+  // Register vale.sync command
+  const syncCommand = vscode.commands.registerCommand('vale.sync', async () => {
+    try {
+      vscode.window.showInformationMessage('Vale: Running sync...');
+      
+      // Get the workspace folder
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceFolder) {
+        vscode.window.showErrorMessage('Vale: No workspace folder found');
+        return;
+      }
+
+      // Get the config path if specified
+      const configuration = vscode.workspace.getConfiguration();
+      let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
+      
+      // Resolve config path
+      let resolvedConfigPath = configPathRaw;
+      if (configPathRaw.includes("${workspaceFolder}")) {
+        resolvedConfigPath = configPathRaw.replace(
+          /\$\{workspaceFolder\}/g,
+          workspaceFolder
+        );
+      } else if (
+        configPathRaw.startsWith("./") ||
+        (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
+      ) {
+        resolvedConfigPath = path.join(workspaceFolder, configPathRaw);
+      }
+
+      // Execute vale sync
+      const valeCommand = resolvedConfigPath 
+        ? `vale --config="${resolvedConfigPath}" sync`
+        : 'vale sync';
+
+      const { stdout, stderr } = await execAsync(valeCommand, {
+        cwd: workspaceFolder
+      });
+
+      if (stderr) {
+        console.error('Vale sync stderr:', stderr);
+      }
+      
+      console.log('Vale sync output:', stdout);
+      vscode.window.showInformationMessage('Vale: Sync completed successfully');
+    } catch (error: any) {
+      console.error('Vale sync failed:', error);
+      const errorMessage = error.message || String(error);
+      vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
+    }
+  });
+
+  context.subscriptions.push(syncCommand);
 }
 
 export async function deactivate(): Promise<void> {
