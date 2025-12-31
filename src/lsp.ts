@@ -6,16 +6,13 @@ import { Readable } from "node:stream";
 import * as unzipper from "unzipper";
 import fs from "fs";
 import * as path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
 } from "vscode-languageclient/node";
-
-const execAsync = promisify(exec);
 
 let client: LanguageClient;
 
@@ -257,20 +254,44 @@ export async function activate(context: ExtensionContext) {
         resolvedConfigPath = path.join(workspaceFolder, configPathRaw);
       }
 
-      // Execute vale sync
-      const valeCommand = resolvedConfigPath 
-        ? `vale --config="${resolvedConfigPath}" sync`
-        : 'vale sync';
+      // Execute vale sync using spawn for security
+      const valeArgs = resolvedConfigPath 
+        ? ['--config', resolvedConfigPath, 'sync']
+        : ['sync'];
 
-      const { stdout, stderr } = await execAsync(valeCommand, {
-        cwd: workspaceFolder
+      await new Promise<void>((resolve, reject) => {
+        const valeProcess = spawn('vale', valeArgs, {
+          cwd: workspaceFolder
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        valeProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        valeProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        valeProcess.on('error', (error) => {
+          reject(error);
+        });
+
+        valeProcess.on('close', (code) => {
+          if (code === 0) {
+            console.log('Vale sync output:', stdout);
+            if (stderr) {
+              console.error('Vale sync stderr:', stderr);
+            }
+            resolve();
+          } else {
+            reject(new Error(`Vale sync exited with code ${code}: ${stderr}`));
+          }
+        });
       });
 
-      if (stderr) {
-        console.error('Vale sync stderr:', stderr);
-      }
-      
-      console.log('Vale sync output:', stdout);
       vscode.window.showInformationMessage('Vale: Sync completed successfully');
     } catch (error: any) {
       console.error('Vale sync failed:', error);
