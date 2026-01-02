@@ -35,6 +35,14 @@
       {
         "command": "vale.sync",
         "title": "Vale: Sync"
+      },
+      {
+        "command": "vale.addToAcceptList",
+        "title": "Vale: Add to Accept List"
+      },
+      {
+        "command": "vale.addToRejectList",
+        "title": "Vale: Add to Reject List"
       }
     ],
     "configuration": {
@@ -133,16 +141,6 @@
         }
       }
     },
-    "commands": [
-      {
-        "command": "vale.addToAcceptList",
-        "title": "Vale: Add to Accept List"
-      },
-      {
-        "command": "vale.addToRejectList",
-        "title": "Vale: Add to Reject List"
-      }
-    ],
     "menus": {
       "editor/context": [
         {
@@ -169,22 +167,22 @@
     "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.932.0",
+    "@aws-sdk/client-s3": "^3.958.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.0.3",
     "@types/unzipper": "^0.10.11",
-    "@types/vscode": "^1.106.0",
+    "@types/vscode": "^1.107.0",
     "@types/which": "^3.0.4",
-    "@typescript-eslint/eslint-plugin": "^8.33.0",
-    "@typescript-eslint/parser": "^8.46.4",
-    "eslint": "^9.27.0",
-    "mocha": "^11.5.0",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
+    "mocha": "^11.7.5",
     "ts-loader": "^9.5.4",
     "tslint": "^6.1.3",
-    "typescript": "^5.8.3",
+    "typescript": "^5.9.3",
     "unzipper": "~0.12.3",
     "vscode-test": "^1.6.1",
-    "webpack": "^5.99.9",
+    "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
