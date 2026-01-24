@@ -20,7 +20,7 @@
   },
   "version": "0.32.0",
   "engines": {
-    "vscode": "^1.106.0",
+    "vscode": "^1.107.0",
     "node": ">=20 <=22.11"
   },
   "categories": [
