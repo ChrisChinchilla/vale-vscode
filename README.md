@@ -60,6 +60,12 @@ With no additional Vale configuration, the spell checker uses a Hunspell-compati
 
 The extension doesn't support adding words to dictionaries. For now, the best option is to add them to ignore files or filters as described in the [Vale documentation](https://vale.sh/docs/topics/styles/#spelling).
 
+### Vale Sync
+
+You can synchronize Vale packages from your configuration file using the **Vale: Sync** command from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>). This runs `vale sync` to download and update packages defined in your `.vale.ini` file.
+
+Alternatively, you can enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+
 ## Settings
 
 The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale_).
