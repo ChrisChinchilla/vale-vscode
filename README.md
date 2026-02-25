@@ -8,10 +8,6 @@ The Vale extension for VS Code provides customizable spelling, style, and gramma
 
 ## Important notes on switch to Vale Language Server as of v0.30.0
 
-There are issues I know about with this switch. But I have been sitting on this for so long I wanted to release it and will fix soon™️.
-
-**If the extension is unusable while I fix those features, then the old pre-LSP version is still available as the pre-release version (v0.25.1), [pre-lsp branch](https://github.com/ChrisChinchilla/vale-vscode/tree/chrischinch/pre-lsp) of the extension.**
-
 > [!NOTE]
 > This new release uses the [Vale Language Server](https://github.com/errata-ai/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
 > I based re-development of these features [on this survey](https://github.com/ChrisChinchilla/vale-vscode/discussions/50). If you find features you use no longer working, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues/new).
@@ -65,6 +61,10 @@ The extension doesn't support adding words to dictionaries. For now, the best op
 You can synchronize Vale packages from your configuration file using the **Vale: Sync** command from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>). This runs `vale sync` to download and update packages defined in your `.vale.ini` file.
 
 Alternatively, you can enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+
+### Add to Vale vocabulary
+
+You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
 
 ## Settings
 
