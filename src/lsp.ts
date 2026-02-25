@@ -95,7 +95,7 @@ interface valeArgs {
 /**
  * Gets all styles paths from Vale's configuration using `vale ls-config`
  */
-async function getStylesPathsFromVale(workspaceRoot: string): Promise<string[] | null> {
+async function getStylesPathsFromVale(workspaceRoot: string): Promise<string | null> {
   return new Promise((resolve) => {
     const valeProcess = spawn("vale", ["ls-config"], {
       cwd: workspaceRoot,
@@ -124,7 +124,8 @@ async function getStylesPathsFromVale(workspaceRoot: string): Promise<string[] |
         const config = JSON.parse(stdout);
         // Vale returns the config with Paths array containing the styles paths
         if (config.Paths && Array.isArray(config.Paths) && config.Paths.length > 0) {
-          resolve(config.Paths);
+          // TODO: Hacky. But by default Vale adds a path above to the Application support folder which I don't think many use, and the second in the array is likely the right one.
+          resolve(config.Paths[1]);
         } else {
           console.error("No Paths found in Vale config");
           resolve(null);
@@ -146,25 +147,26 @@ async function getStylesPathsFromVale(workspaceRoot: string): Promise<string[] |
  * Finds the styles path that contains the vocabulary directory, or returns the first path
  */
 async function findVocabStylesPath(
-  stylesPaths: string[],
+  stylesPaths: string,
   vocabularyName: string
 ): Promise<string> {
   // Check each path to see if the vocabulary directory already exists
-  for (const stylesPath of stylesPaths) {
+  // for (const stylesPath of stylesPaths) {
     const vocabDir = path.join(
-      stylesPath,
+      stylesPaths,
       "config",
       "vocabularies",
       vocabularyName
     );
     try {
+      // console.log(`Checking for vocabulary directory at ${vocabDir}`);
       await fs.promises.access(vocabDir);
       // Directory exists, use this path
-      return stylesPath;
+      return stylesPaths;
     } catch {
       // Directory doesn't exist in this path, continue searching
     }
-  }
+  // }
 
   // Vocabulary doesn't exist in any path, use the first one
   return stylesPaths[0];
@@ -204,7 +206,7 @@ async function addToVocabulary(
 
   // Path to the vocabulary file
   const vocabFile = path.join(vocabDir, fileName);
-
+// console.log(`Adding "${word}" to ${vocabFile}`);
   // Check if the file exists and if the word is already in it
   let fileContent = "";
   try {
