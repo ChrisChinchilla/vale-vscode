@@ -1,6 +1,6 @@
 # Vale + VS Code
 
-[![Publish Extension on tag](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml)
+[![Publish Extension on tag](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml) [![Publish Pre-Release Extension](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishPreRelease.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishPreRelease.yml)
 
 > The Visual Studio Code extension for [Vale](https://github.com/errata-ai/vale).
 
