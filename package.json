@@ -1,8 +1,8 @@
 {
   "name": "vale-vscode",
-  "displayName": "Vale VSCode",
+  "displayName": "Vale Linter",
   "icon": ".vscode/icon.png",
-  "description": "The Visual Studio Code extension for Vale.",
+  "description": "The Vale linter extension for Visual Studio Code and editors based on Visual Studio Code.",
   "bugs": "https://github.com/chrischinchilla/vale-vscode/issues",
   "author": {
     "name": "Chris Chinchilla",

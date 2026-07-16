@@ -1,10 +1,10 @@
-# Vale + VS Code
+# The Vale extension for Visual Studio Code
 
 [![Publish Extension on tag](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml)
 
 > The Visual Studio Code extension for [Vale](https://github.com/errata-ai/vale).
 
-The Vale extension for VS Code provides customizable spelling, style, and grammar checking for a variety of markup formats (Markdown, AsciiDoc, reStructuredText, HTML, and DITA).
+The Vale extension for Visual Studio Code and editors based on Visual Studio Code such as Cursor provides customizable spelling, style, and grammar checking for a variety of markup formats (Markdown, AsciiDoc, reStructuredText, HTML, and DITA).
 
 ## Important notes on switch to Vale Language Server as of v0.30.0
 
