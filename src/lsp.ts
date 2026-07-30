@@ -15,6 +15,58 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient;
+let valeOutputChannel: vscode.OutputChannel;
+
+class ValeCommandItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    commandId: string,
+    commandTitle: string,
+    iconName: string,
+    tooltip?: string
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.command = { command: commandId, title: commandTitle };
+    this.iconPath = new vscode.ThemeIcon(iconName);
+    if (tooltip) {
+      this.tooltip = tooltip;
+    }
+  }
+}
+
+class ValeCommandsProvider
+  implements vscode.TreeDataProvider<ValeCommandItem>
+{
+  getTreeItem(element: ValeCommandItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(): ValeCommandItem[] {
+    return [
+      new ValeCommandItem(
+        "Sync Packages",
+        "vale.sync",
+        "Sync",
+        "sync",
+        "Download and install Vale packages defined in your config"
+      ),
+      new ValeCommandItem(
+        "Show Configuration",
+        "vale.showConfig",
+        "Show Configuration",
+        "gear",
+        "Display the active Vale configuration (vale ls-config)"
+      ),
+      new ValeCommandItem(
+        "Show File Metrics",
+        "vale.showMetrics",
+        "Show Metrics",
+        "graph",
+        "Display readability metrics for the active file (vale ls-metrics)"
+      ),
+    ];
+  }
+}
 
 export function getArch(): String | null {
   if (process.arch == "x64") return "x86_64";
@@ -252,7 +304,43 @@ function resolveConfigPath(
   return resolvedConfigPath;
 }
 
+/**
+ * Runs a Vale CLI command and streams the output to the Vale output channel.
+ */
+async function runValeCommand(
+  args: string[],
+  workingDir: string
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const valeProcess = spawn("vale", args, {
+      cwd: workingDir,
+      shell: true,
+    });
+
+    valeProcess.stdout.on("data", (data) => {
+      valeOutputChannel.append(data.toString());
+    });
+
+    valeProcess.stderr.on("data", (data) => {
+      valeOutputChannel.append(data.toString());
+    });
+
+    valeProcess.on("error", reject);
+
+    valeProcess.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`vale ${args[0]} exited with code ${code}`));
+      }
+    });
+  });
+}
+
 export async function activate(context: ExtensionContext) {
+  valeOutputChannel = vscode.window.createOutputChannel("Vale");
+  context.subscriptions.push(valeOutputChannel);
+
   // Prevent multiple activations - stop existing client if present
   if (client) {
     console.log("Vale language client already active, stopping existing client");
@@ -455,60 +543,95 @@ export async function activate(context: ExtensionContext) {
   // Helper function to run vale sync
   const runValeSync = async () => {
     try {
-      vscode.window.showInformationMessage('Vale: Running sync...');
+      const workingDir =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
-      // Use workspace folder or current working directory
-      const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      valeOutputChannel.clear();
+      valeOutputChannel.show(true);
+      valeOutputChannel.appendLine("Running vale sync...\n");
 
-      // Vale will find its config automatically, just run sync
-      await new Promise<void>((resolve, reject) => {
-        const valeProcess = spawn('vale', ['sync'], {
-          cwd: workingDir,
-          shell: true
-        });
+      await runValeCommand(["sync"], workingDir);
 
-        let stdout = '';
-        let stderr = '';
-
-        valeProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
-        });
-
-        valeProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
-
-        valeProcess.on('error', (error) => {
-          reject(error);
-        });
-
-        valeProcess.on('close', (code) => {
-          if (code === 0) {
-            if (stdout.trim()) {
-              console.log('Vale sync output:', stdout);
-            }
-            if (stderr) {
-              console.error('Vale sync stderr:', stderr);
-            }
-            resolve();
-          } else {
-            reject(new Error(`Vale sync exited with code ${code}: ${stderr}`));
-          }
-        });
-      });
-
-      vscode.window.showInformationMessage('Vale: Sync completed successfully');
+      valeOutputChannel.appendLine("\nSync completed successfully.");
+      vscode.window.showInformationMessage("Vale: Sync completed successfully");
     } catch (error: any) {
-      console.error('Vale sync failed:', error);
+      console.error("Vale sync failed:", error);
       const errorMessage = error.message || String(error);
       vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
     }
   };
 
   // Register vale.sync command
-  const syncCommand = vscode.commands.registerCommand('vale.sync', runValeSync);
+  const syncCommand = vscode.commands.registerCommand("vale.sync", runValeSync);
 
-  context.subscriptions.push(addToAcceptCommand, addToRejectCommand, syncCommand);
+  // Register vale.showConfig command - runs `vale ls-config` and shows output
+  const showConfigCommand = vscode.commands.registerCommand(
+    "vale.showConfig",
+    async () => {
+      try {
+        const workingDir =
+          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+
+        valeOutputChannel.clear();
+        valeOutputChannel.show(true);
+        valeOutputChannel.appendLine("Running vale ls-config...\n");
+
+        await runValeCommand(["ls-config"], workingDir);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Vale: Failed to show configuration - ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  // Register vale.showMetrics command - runs `vale ls-metrics` on the active file
+  const showMetricsCommand = vscode.commands.registerCommand(
+    "vale.showMetrics",
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showErrorMessage("Vale: No active editor");
+        return;
+      }
+
+      const filePath = editor.document.uri.fsPath;
+
+      try {
+        const workingDir =
+          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+          path.dirname(filePath);
+
+        valeOutputChannel.clear();
+        valeOutputChannel.show(true);
+        valeOutputChannel.appendLine(
+          `Running vale ls-metrics for ${path.basename(filePath)}...\n`
+        );
+
+        await runValeCommand(["ls-metrics", filePath], workingDir);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Vale: Failed to show metrics - ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  // Register the Vale commands TreeView in the Explorer sidebar
+  const valeCommandsProvider = new ValeCommandsProvider();
+  const valeTreeView = vscode.window.createTreeView("valeCommands", {
+    treeDataProvider: valeCommandsProvider,
+    showCollapseAll: false,
+  });
+
+  context.subscriptions.push(
+    addToAcceptCommand,
+    addToRejectCommand,
+    syncCommand,
+    showConfigCommand,
+    showMetricsCommand,
+    valeTreeView
+  );
 
   // Run sync on startup if enabled
   if (configuration.get("vale.valeCLI.syncOnStartup")) {

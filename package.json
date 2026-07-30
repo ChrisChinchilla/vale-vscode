@@ -34,7 +34,8 @@
     "commands": [
       {
         "command": "vale.sync",
-        "title": "Vale: Sync"
+        "title": "Vale: Sync",
+        "icon": "$(sync)"
       },
       {
         "command": "vale.addToAcceptList",
@@ -43,8 +44,26 @@
       {
         "command": "vale.addToRejectList",
         "title": "Vale: Add to Reject List"
+      },
+      {
+        "command": "vale.showConfig",
+        "title": "Vale: Show Configuration",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "vale.showMetrics",
+        "title": "Vale: Show Readability Metrics",
+        "icon": "$(graph)"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "valeCommands",
+          "name": "Vale"
+        }
+      ]
+    },
     "configuration": {
       "type": "object",
       "title": "Vale",
@@ -142,6 +161,13 @@
       }
     },
     "menus": {
+      "view/title": [
+        {
+          "command": "vale.sync",
+          "when": "view == valeCommands",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "vale.addToAcceptList",

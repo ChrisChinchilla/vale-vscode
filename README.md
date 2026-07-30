@@ -56,11 +56,13 @@ With no additional Vale configuration, the spell checker uses a Hunspell-compati
 
 The extension doesn't support adding words to dictionaries. For now, the best option is to add them to ignore files or filters as described in the [Vale documentation](https://vale.sh/docs/topics/styles/#spelling).
 
-### Vale Sync
+### Vale commands
 
-You can synchronize Vale packages from your configuration file using the **Vale: Sync** command from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>). This runs `vale sync` to download and update packages defined in your `.vale.ini` file.
+The following commands are available from the **Vale** panel in the Explorer sidebar and from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>):
 
-Alternatively, you can enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Sync** runs `vale sync` to download and update packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
+- **Vale: Show Readability Metrics** runs `vale ls-metrics` for the active file and displays its readability metrics in the Vale output panel.
 
 ### Add to Vale vocabulary
 
