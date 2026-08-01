@@ -1,7 +1,7 @@
 import { workspace, ExtensionContext } from "vscode";
 import * as vscode from "vscode";
 
-import { writeFile, readFile, mkdir, appendFile } from "node:fs/promises";
+import { writeFile, readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { spawn } from "node:child_process";
 import * as unzipper from "unzipper";
@@ -49,6 +49,13 @@ class ValeCommandsProvider
         "Sync",
         "sync",
         "Download and install Vale packages defined in your config"
+      ),
+      new ValeCommandItem(
+        "Install or Update Vale",
+        "vale.install",
+        "Install Vale",
+        "cloud-download",
+        "Install or update the Vale binary the language server manages"
       ),
       new ValeCommandItem(
         "Show Configuration",
@@ -177,142 +184,67 @@ interface valeArgs {
 }
 
 /**
- * Gets all styles paths from Vale's configuration using `vale ls-config`
+ * Asks the language server to run one of its commands.
+ *
+ * The server owns Vale: it knows which binary to run, which configuration
+ * applies, and where a document's `StylesPath` lives. Shelling out to `vale`
+ * from here would resolve none of that.
  */
-async function getStylesPathsFromVale(workspaceRoot: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const valeProcess = spawn("vale", ["ls-config"], {
-      cwd: workspaceRoot,
-      shell: true,
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    valeProcess.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    valeProcess.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    valeProcess.on("close", (code) => {
-      if (code !== 0) {
-        console.error("Vale ls-config failed:", stderr);
-        resolve(null);
-        return;
-      }
-
-      try {
-        const config = JSON.parse(stdout);
-        // Vale returns the config with Paths array containing the styles paths
-        if (config.Paths && Array.isArray(config.Paths) && config.Paths.length > 0) {
-          // TODO: Hacky. But by default Vale adds a path above to the Application support folder which I don't think many use, and the second in the array is likely the right one.
-          resolve(config.Paths[1]);
-        } else {
-          console.error("No Paths found in Vale config");
-          resolve(null);
-        }
-      } catch (error) {
-        console.error("Failed to parse Vale config:", error);
-        resolve(null);
-      }
-    });
-
-    valeProcess.on("error", (error) => {
-      console.error("Failed to run vale ls-config:", error);
-      resolve(null);
-    });
+async function executeServerCommand(
+  command: string,
+  ...args: unknown[]
+): Promise<unknown> {
+  if (!client || !client.isRunning()) {
+    throw new Error("The Vale Language Server isn't running.");
+  }
+  return client.sendRequest("workspace/executeCommand", {
+    command,
+    arguments: args,
   });
 }
 
 /**
- * Finds the styles path that contains the vocabulary directory, or returns the first path
+ * Adds the selected word to a vocabulary via the language server.
+ *
+ * `accept` picks between `vocab.add` and `vocab.reject`, which write to
+ * `accept.txt` and `reject.txt` respectively.
  */
-async function findVocabStylesPath(
-  stylesPaths: string,
-  vocabularyName: string
-): Promise<string> {
-  // Check each path to see if the vocabulary directory already exists
-  // for (const stylesPath of stylesPaths) {
-    const vocabDir = path.join(
-      stylesPaths,
-      "config",
-      "vocabularies",
-      vocabularyName
-    );
-    try {
-      // console.log(`Checking for vocabulary directory at ${vocabDir}`);
-      await fs.promises.access(vocabDir);
-      // Directory exists, use this path
-      return stylesPaths;
-    } catch {
-      // Directory doesn't exist in this path, continue searching
-    }
-  // }
-
-  // Vocabulary doesn't exist in any path, use the first one
-  return stylesPaths[0];
-}
-
-/**
- * Adds a word to a vocabulary file (accept.txt or reject.txt)
- */
-async function addToVocabulary(
-  word: string,
-  vocabularyName: string,
-  fileName: "accept.txt" | "reject.txt",
-  workspaceRoot: string
-): Promise<void> {
-  // Get all styles paths from Vale using ls-config
-  const stylesPaths = await getStylesPathsFromVale(workspaceRoot);
-
-  if (!stylesPaths || stylesPaths.length === 0) {
-    throw new Error(
-      "Could not get styles paths from Vale. Make sure Vale is installed and a .vale.ini file exists."
-    );
+async function addToVocabulary(accept: boolean): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage("Vale: No active editor");
+    return;
   }
 
-  // Find which path contains the vocabulary directory (or use first if none exist)
-  const stylesPath = await findVocabStylesPath(stylesPaths, vocabularyName);
-
-  // Build the vocabulary folder path: <StylesPath>/config/vocabularies/<name>/
-  const vocabDir = path.join(
-    stylesPath,
-    "config",
-    "vocabularies",
-    vocabularyName
-  );
-
-  // Create the directory structure if it doesn't exist
-  await mkdir(vocabDir, { recursive: true });
-
-  // Path to the vocabulary file
-  const vocabFile = path.join(vocabDir, fileName);
-// console.log(`Adding "${word}" to ${vocabFile}`);
-  // Check if the file exists and if the word is already in it
-  let fileContent = "";
-  try {
-    fileContent = await readFile(vocabFile, "utf-8");
-  } catch (error) {
-    // File doesn't exist yet, will be created
+  const term = editor.document.getText(editor.selection).trim();
+  if (!term) {
+    vscode.window.showErrorMessage("Vale: No text selected");
+    return;
   }
 
-  const lines = fileContent.split("\n").map((line) => line.trim());
-  if (lines.includes(word)) {
-    vscode.window.showInformationMessage(
-      `"${word}" is already in ${fileName}`
+  const vocab = vscode.workspace
+    .getConfiguration()
+    .get<string>("vale.vocabPath");
+  if (!vocab) {
+    vscode.window.showErrorMessage(
+      "Vale: Set vale.vocabPath to name the vocabulary to write to."
     );
     return;
   }
 
-  // Append the word to the file
-  await appendFile(vocabFile, `${word}\n`);
-
-  vscode.window.showInformationMessage(
-    `Added "${word}" to ${fileName} in vocabulary "${vocabularyName}"`
-  );
+  try {
+    await executeServerCommand(accept ? "vocab.add" : "vocab.reject", {
+      uri: editor.document.uri.toString(),
+      vocab,
+      term,
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Vale: Failed to update the vocabulary - ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
 }
 
 function resolveConfigPath(
@@ -343,8 +275,14 @@ async function runValeCommand(
   args: string[],
   workingDir: string
 ): Promise<void> {
+  // Honor the configured binary: a user who relies on the server to install
+  // Vale may have nothing named `vale` on their $PATH at all.
+  const exe =
+    vscode.workspace.getConfiguration().get<string>("vale.valeCLI.path") ||
+    "vale";
+
   return new Promise<void>((resolve, reject) => {
-    const valeProcess = spawn("vale", args, {
+    const valeProcess = spawn(exe, args, {
       cwd: workingDir,
       shell: true,
     });
@@ -514,107 +452,53 @@ export async function activate(context: ExtensionContext) {
   // Register vocabulary commands
   const addToAcceptCommand = vscode.commands.registerCommand(
     "vale.addToAcceptList",
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage("No active editor");
-        return;
-      }
-
-      const selection = editor.selection;
-      const word = editor.document.getText(selection).trim();
-
-      if (!word) {
-        vscode.window.showErrorMessage("No text selected");
-        return;
-      }
-
-      // Get vocabulary path from settings
-      const vocabPath = configuration.get<string>("vale.vocabPath");
-      if (!vocabPath) {
-        vscode.window.showErrorMessage(
-          "Please set vale.vocabPath in your settings to use vocabulary features"
-        );
-        return;
-      }
-
-      try {
-        // Use workspace root or file's directory as working directory for vale ls-config
-        const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
-                          path.dirname(editor.document.uri.fsPath);
-        await addToVocabulary(word, vocabPath, "accept.txt", workingDir);
-      } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    }
+    () => addToVocabulary(true)
   );
 
   const addToRejectCommand = vscode.commands.registerCommand(
     "vale.addToRejectList",
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage("No active editor");
-        return;
-      }
-
-      const selection = editor.selection;
-      const word = editor.document.getText(selection).trim();
-
-      if (!word) {
-        vscode.window.showErrorMessage("No text selected");
-        return;
-      }
-
-      // Get vocabulary path from settings
-      const vocabPath = configuration.get<string>("vale.vocabPath");
-      if (!vocabPath) {
-        vscode.window.showErrorMessage(
-          "Please set vale.vocabPath in your settings to use vocabulary features"
-        );
-        return;
-      }
-
-      try {
-        // Use workspace root or file's directory as working directory for vale ls-config
-        const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
-                          path.dirname(editor.document.uri.fsPath);
-        await addToVocabulary(word, vocabPath, "reject.txt", workingDir);
-      } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    }
+    () => addToVocabulary(false)
   );
 
   // Helper function to run vale sync
+  //
+  // The server reports the outcome itself, via `window/showMessage`.
   const runValeSync = async () => {
     try {
-      const workingDir =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-
-      valeOutputChannel.clear();
-      valeOutputChannel.show(true);
-      valeOutputChannel.appendLine("Running vale sync...\n");
-
-      await runValeCommand(["sync"], workingDir);
-
-      valeOutputChannel.appendLine("\nSync completed successfully.");
-      vscode.window.showInformationMessage("Vale: Sync completed successfully");
-    } catch (error: any) {
+      await executeServerCommand("cli.sync");
+    } catch (error) {
       console.error("Vale sync failed:", error);
-      const errorMessage = error.message || String(error);
-      vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
+      vscode.window.showErrorMessage(
+        `Vale: Sync failed - ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   };
 
   // Register vale.sync command
   const syncCommand = vscode.commands.registerCommand("vale.sync", runValeSync);
 
+  // Register vale.install command - installs or updates the Vale CLI
+  const installCommand = vscode.commands.registerCommand(
+    "vale.install",
+    async () => {
+      try {
+        await executeServerCommand("cli.install");
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Vale: Failed to install Vale - ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+  );
+
   // Register vale.showConfig command - runs `vale ls-config` and shows output
+  //
+  // The server has no command for this, so it stays on the CLI -- but it uses
+  // the configured binary rather than whatever `vale` is on $PATH.
   const showConfigCommand = vscode.commands.registerCommand(
     "vale.showConfig",
     async () => {
@@ -635,7 +519,8 @@ export async function activate(context: ExtensionContext) {
     }
   );
 
-  // Register vale.showMetrics command - runs `vale ls-metrics` on the active file
+  // Register vale.showMetrics command - asks the server for the active file's
+  // metrics, which it reports via `window/showMessage`.
   const showMetricsCommand = vscode.commands.registerCommand(
     "vale.showMetrics",
     async () => {
@@ -645,23 +530,15 @@ export async function activate(context: ExtensionContext) {
         return;
       }
 
-      const filePath = editor.document.uri.fsPath;
-
       try {
-        const workingDir =
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
-          path.dirname(filePath);
-
-        valeOutputChannel.clear();
-        valeOutputChannel.show(true);
-        valeOutputChannel.appendLine(
-          `Running vale ls-metrics for ${path.basename(filePath)}...\n`
-        );
-
-        await runValeCommand(["ls-metrics", filePath], workingDir);
+        await executeServerCommand("doc.metrics", {
+          uri: editor.document.uri.toString(),
+        });
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Vale: Failed to show metrics - ${error instanceof Error ? error.message : String(error)}`
+          `Vale: Failed to show metrics - ${
+            error instanceof Error ? error.message : String(error)
+          }`
         );
       }
     }
@@ -678,15 +555,14 @@ export async function activate(context: ExtensionContext) {
     addToAcceptCommand,
     addToRejectCommand,
     syncCommand,
+    installCommand,
     showConfigCommand,
     showMetricsCommand,
     valeTreeView
   );
 
-  // Run sync on startup if enabled
-  if (configuration.get("vale.valeCLI.syncOnStartup")) {
-    await runValeSync();
-  }
+  // The server syncs on startup itself when told to, so running it here as
+  // well would sync twice.
 }
 
 export async function deactivate(): Promise<void> {

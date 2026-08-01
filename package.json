@@ -38,6 +38,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "vale.install",
+        "title": "Vale: Install or Update Vale",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "vale.addToAcceptList",
         "title": "Vale: Add to Accept List"
       },

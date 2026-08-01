@@ -60,13 +60,16 @@ The extension doesn't support adding words to dictionaries. For now, the best op
 
 The following commands are available from the **Vale** panel in the Explorer sidebar and from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>):
 
-- **Vale: Sync** runs `vale sync` to download and update packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Sync** downloads and updates the packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages.
 - **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
-- **Vale: Show Readability Metrics** runs `vale ls-metrics` for the active file and displays its readability metrics in the Vale output panel.
+- **Vale: Show Readability Metrics** reports the active file's readability metrics.
 
 ### Add to Vale vocabulary
 
-You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
+You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting to name the vocabulary to write to. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
+
+Spelling alerts also offer this as a quick fix, one per vocabulary defined in your configuration, with no setting required.
 
 ## Settings
 
