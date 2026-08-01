@@ -167,7 +167,10 @@ type valeConfigOptions =
   | "syncOnStartup"
   | "filter"
   | "installVale"
-  | "valeBinaryPath";
+  | "valeBinaryPath"
+  | "lintOnChange"
+  | "debounceMs"
+  | "showMetrics";
 
 interface valeArgs {
   value: string;
@@ -465,8 +468,14 @@ export async function activate(context: ExtensionContext) {
     // TODO: Build into proper onboarding
     installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
     // Supported by the language server as of v0.5.0.
+    //
+    // The server turns the last three on unless it's told otherwise, so they
+    // are forwarded explicitly to keep the VS Code settings authoritative.
     valeBinaryPath: (configuration.get<string>("vale.valeCLI.path") ||
       "") as unknown as valeArgs,
+    lintOnChange: configuration.get("vale.valeCLI.lintOnChange") as valeArgs,
+    debounceMs: configuration.get("vale.valeCLI.debounceMs") as valeArgs,
+    showMetrics: configuration.get("vale.valeCLI.showMetrics") as valeArgs,
   };
 
   // TODO: So do I need the below?

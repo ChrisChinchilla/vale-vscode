@@ -115,6 +115,25 @@
           "default": null,
           "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`."
         },
+        "vale.valeCLI.lintOnChange": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Lint as you type, rather than only when a file is saved. Set to `false` to restore save-only linting."
+        },
+        "vale.valeCLI.debounceMs": {
+          "scope": "resource",
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "markdownDescription": "How long typing has to settle before linting, in milliseconds. Only applies when `#vale.valeCLI.lintOnChange#` is enabled."
+        },
+        "vale.valeCLI.showMetrics": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Show a code lens with the document's metrics (word count, reading time, and so on)."
+        },
         "vale.valeCLI.minAlertLevel": {
           "scope": "resource",
           "type": "string",
