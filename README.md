@@ -69,7 +69,7 @@ The following commands are available from the **Vale** panel in the Explorer sid
 
 You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting to name the vocabulary to write to. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
 
-Spelling alerts also offer this as a quick fix, one per vocabulary defined in your configuration, with no setting required.
+Spelling alerts also offer an "Add to vocabulary" quick fix, one per vocabulary defined in your configuration, which needs no `vale.vocabPath`. Rejecting a word is only available as a command.
 
 ## Settings
 
