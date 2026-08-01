@@ -123,8 +123,8 @@
         "vale.valeCLI.lintOnChange": {
           "scope": "resource",
           "type": "boolean",
-          "default": true,
-          "markdownDescription": "Lint as you type, rather than only when a file is saved. Set to `false` to restore save-only linting."
+          "default": false,
+          "markdownDescription": "Lint as you type, rather than only when a file is saved."
         },
         "vale.valeCLI.debounceMs": {
           "scope": "resource",
@@ -136,7 +136,7 @@
         "vale.valeCLI.showMetrics": {
           "scope": "resource",
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Show a code lens with the document's metrics (word count, reading time, and so on)."
         },
         "vale.valeCLI.minAlertLevel": {

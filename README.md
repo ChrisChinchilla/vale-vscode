@@ -83,6 +83,6 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
 - `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages.
-- `vale.valeCLI.lintOnChange` (default: `true`): Lint as you type, rather than only when a file is saved.
-- `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds.
-- `vale.valeCLI.showMetrics` (default: `true`): Show a code lens with the document's metrics (word count, reading time, and so on).
+- `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved.
+- `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled.
+- `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on).
