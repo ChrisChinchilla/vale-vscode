@@ -90,23 +90,48 @@ export function getPlatform(): String | null {
   }
 }
 
-async function downloadLSP(context: ExtensionContext): Promise<void> {
-  const TAG = "v0.4.0";
-  let URL: string;
-  if (getArch() == "arm64" && getPlatform() == "win32") {
-    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-aarch64-pc-windows-msvc.zip`;
-  } else {
-    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
+// The version of the language server to download.
+//
+// `serverVersionFile` records which tag the binary on disk came from, so
+// bumping this is enough to upgrade an existing install.
+const TAG = "v0.5.0";
+
+/**
+ * Returns the file recording the tag the downloaded server came from.
+ */
+function serverVersionFile(context: ExtensionContext): string {
+  return path.join(context.extensionPath, "vale-ls.version");
+}
+
+/**
+ * Reports whether the server on disk is the version we expect.
+ */
+async function isCurrent(context: ExtensionContext): Promise<boolean> {
+  try {
+    const installed = await readFile(serverVersionFile(context), "utf8");
+    return installed.trim() === TAG;
+  } catch {
+    // No stamp: either a fresh install or one from before we wrote one.
+    return false;
   }
+}
+
+async function downloadLSP(context: ExtensionContext): Promise<void> {
+  const URL = `https://github.com/vale-cli/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
   const extStorage = context.extensionPath;
   const tmpZip = path.join(extStorage, "vale-ls.zip");
 
   try {
     vscode.window.showInformationMessage(
-      "First launch: Downloading Vale Language Server"
+      `Downloading Vale Language Server ${TAG}`
     );
 
     const response = await fetch(URL);
+    // Without this, an error page is written to the archive and the failure
+    // surfaces later as a corrupt zip.
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText} for ${URL}`);
+    }
     if (!response.body) {
       throw new Error("Failed to fetch the response body.");
     }
@@ -125,8 +150,11 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
     }
     await fs.promises.unlink(tmpZip);
 
+    // Written last so that a failed extract isn't recorded as a success.
+    await writeFile(serverVersionFile(context), TAG);
+
     vscode.window.showInformationMessage(
-      "First launch: Vale Language Server downloaded"
+      `Vale Language Server ${TAG} downloaded`
     );
   } catch (error) {
     console.error("Download failed:", error);
@@ -138,7 +166,8 @@ type valeConfigOptions =
   | "configPath"
   | "syncOnStartup"
   | "filter"
-  | "installVale";
+  | "installVale"
+  | "valeBinaryPath";
 
 interface valeArgs {
   value: string;
@@ -358,15 +387,24 @@ export async function activate(context: ExtensionContext) {
   if (process.platform === "win32") {
     filePath = path.join(context.extensionPath, "vale-ls.exe");
   }
+  let installed = true;
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-    console.log("Language server exists");
   } catch {
-    console.log("Language server not found, downloading...");
+    installed = false;
+  }
+
+  // A binary that's merely present isn't necessarily the one this release
+  // expects: without the version check, an existing install would keep an
+  // older server forever.
+  if (!installed || !(await isCurrent(context))) {
+    console.log(`Downloading language server ${TAG}...`);
     await downloadLSP(context);
 
     // Verify download succeeded
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+  } else {
+    console.log(`Language server ${TAG} exists`);
   }
 
   console.log("Starting language server");
@@ -426,6 +464,9 @@ export async function activate(context: ExtensionContext) {
     filter: valeFilter as unknown as valeArgs,
     // TODO: Build into proper onboarding
     installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
+    // Supported by the language server as of v0.5.0.
+    valeBinaryPath: (configuration.get<string>("vale.valeCLI.path") ||
+      "") as unknown as valeArgs,
   };
 
   // TODO: So do I need the below?

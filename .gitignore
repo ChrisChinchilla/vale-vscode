@@ -4,5 +4,6 @@ node_modules
 .vscode-test/
 *.vsix
 vale-ls
+vale-ls.version
 vale_bin
 .DS_Store

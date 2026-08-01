@@ -109,6 +109,12 @@
           "default": false,
           "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user's $PATH. And you need an accessible .vale.ini. file."
         },
+        "vale.valeCLI.path": {
+          "scope": "resource",
+          "type": "string",
+          "default": null,
+          "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`."
+        },
         "vale.valeCLI.minAlertLevel": {
           "scope": "resource",
           "type": "string",

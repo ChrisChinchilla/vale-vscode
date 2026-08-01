@@ -9,12 +9,12 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 ## Important notes on switch to Vale Language Server as of v0.30.0
 
 > [!NOTE]
-> This new release uses the [Vale Language Server](https://github.com/errata-ai/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
+> This new release uses the [Vale Language Server](https://github.com/vale-cli/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
 > I based re-development of these features [on this survey](https://github.com/ChrisChinchilla/vale-vscode/discussions/50). If you find features you use no longer working, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues/new).
 
-> [!WARNING]
-> I know that for those of you use you workspaces, the extension has been broken for a little while. Sorry! I am working on this.
-> The Vale Language Server also has no support for custom Vale binary paths. Again, I am attempting to find a solution to this.
+> [!NOTE]
+> Custom Vale binary paths are supported as of Vale Language Server v0.5.0 — see `vale.valeCLI.path`.
+> That release also tracks every folder in a multi-root workspace and resolves each file against the folder it belongs to, which should address the workspace problems reported here.
 
 ## Installation
 
@@ -79,3 +79,4 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.enableSpellcheck` (default: `false`): Enable in-built spell checking for any `Spelling` styles.
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
+- `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages.
