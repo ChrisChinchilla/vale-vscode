@@ -18,13 +18,13 @@
 
 ### Functional defects
 
-- [ ] **Fix Windows startup.** The code discovers `vale-ls.exe`, then constructs server options using `vale-ls` without `.exe`. See [`src/lsp.ts:353`](src/lsp.ts#L353).
+- [x] **Fix Windows startup.** The code discovers `vale-ls.exe`, then constructs server options using `vale-ls` without `.exe`. See [`src/lsp.ts:353`](src/lsp.ts#L353). Fixed as a side effect of the vale-ls download hardening work: `filePath` is now built once via `getExecutableName(process.platform)` (src/utils.ts) and reused for both the existence check and the language client's `serverOptions`.
 
 - [ ] **Fix executable paths containing spaces.** Paths are incorrectly escaped even though no shell is used for the language server. Only the first space is escaped, producing a nonexistent executable path. See [`src/lsp.ts:372`](src/lsp.ts#L372).
 
 - [ ] **Apply the custom filter setting.** The `vale.valeCLI.filter` setting is exposed but never read. Only the legacy alert-level and spelling filters are applied. See [`package.json:100`](package.json#L100) and [`src/lsp.ts:381`](src/lsp.ts#L381).
 
-- [ ] **Prevent duplicate startup synchronization.** Enabling `syncOnStartup` runs synchronization twice: once inside `vale-ls` and again in the extension after the server starts. The official server documents this as an initialization option. [Vale LSP configuration](https://vale.sh/docs/guides/lsp)
+- [x] **Prevent duplicate startup synchronization.** Enabling `syncOnStartup` runs synchronization twice: once inside `vale-ls` and again in the extension after the server starts. The official server documents this as an initialization option. [Vale LSP configuration](https://vale.sh/docs/guides/lsp)
 
 - [ ] **Fix vocabulary path selection.** `getStylesPathsFromVale` returns a string, but the fallback uses `stylesPaths[0]`, which is the first character—usually `/`. It can consequently try to write beneath `/config/vocabularies`. See [`src/lsp.ts:150`](src/lsp.ts#L150) and [`src/lsp.ts:201`](src/lsp.ts#L201).
 

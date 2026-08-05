@@ -656,10 +656,10 @@ export async function activate(context: ExtensionContext) {
     valeTreeView
   );
 
-  // Run sync on startup if enabled
-  if (configuration.get("vale.valeCLI.syncOnStartup")) {
-    await runValeSync();
-  }
+  // Note: we don't run `vale sync` here even when `vale.valeCLI.syncOnStartup`
+  // is enabled - that setting is passed to vale-ls via `initializationOptions`
+  // (see `valeConfig` above), and vale-ls already runs `vale sync` itself on
+  // startup when it's set. Doing it here too ran sync twice on every startup.
 }
 
 export async function deactivate(): Promise<void> {
