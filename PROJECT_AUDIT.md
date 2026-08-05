@@ -32,7 +32,7 @@
 
 - [ ] **Apply settings changes.** Settings are read once during activation. Changing configuration does not update or restart the language server. Upstream `vale-ls` acknowledges configuration events but does not apply them, so the extension must restart it.
 
-- [ ] **Support multi-root workspaces correctly.** Multi-root operations always use the first workspace folder, regardless of the active file. Upstream multi-root change handling is also currently a no-op.
+- [x] **Support multi-root workspaces correctly.** Multi-root operations always use the first workspace folder, regardless of the active file. Upstream multi-root change handling is also currently a no-op. Fixed by running one `LanguageClient` per workspace folder (vale-ls has no native multi-root support), with commands resolving the folder from the active editor and `onDidChangeWorkspaceFolders` starting/stopping clients as folders change. See `.claude/notes/multi-root-workspaces.md`.
 
 - [ ] **Remove or implement no-op settings.** Three settings appear to do nothing in either this extension or current upstream `vale-ls`:
 

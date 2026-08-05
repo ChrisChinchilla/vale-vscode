@@ -25,8 +25,37 @@ import {
   ServerOptions,
 } from "vscode-languageclient/node";
 
-let client: LanguageClient;
+// vale-ls does not support the `workspace/workspaceFolders` capability, so
+// (per VS Code's standard guidance for such servers) we run one client per
+// workspace folder, each restricted to that folder's files, rather than a
+// single client shared across the whole window. See
+// `.claude/notes/multi-root-workspaces.md`.
+const clients: Map<string, LanguageClient> = new Map();
 let valeOutputChannel: vscode.OutputChannel;
+
+function noFolderClientKey(): string {
+  return "__no_workspace_folder__";
+}
+
+function clientKeyFor(folder?: vscode.WorkspaceFolder): string {
+  return folder ? folder.uri.toString() : noFolderClientKey();
+}
+
+/**
+ * Picks the workspace folder a command should act on: the folder containing
+ * the active editor's document if there is one, otherwise the first
+ * workspace folder.
+ */
+function getRelevantWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+  const activeUri = vscode.window.activeTextEditor?.document.uri;
+  if (activeUri) {
+    const folder = vscode.workspace.getWorkspaceFolder(activeUri);
+    if (folder) {
+      return folder;
+    }
+  }
+  return vscode.workspace.workspaceFolders?.[0];
+}
 
 class ValeCommandItem extends vscode.TreeItem {
   constructor(
@@ -365,42 +394,14 @@ async function runValeCommand(
   });
 }
 
-export async function activate(context: ExtensionContext) {
-  valeOutputChannel = vscode.window.createOutputChannel("Vale");
-  context.subscriptions.push(valeOutputChannel);
-
-  // Prevent multiple activations - stop existing client if present
-  if (client) {
-    console.log("Vale language client already active, stopping existing client");
-    try {
-      await client.stop();
-    } catch (error) {
-      console.error("Error stopping existing client:", error);
-    }
-  }
-
-  const installDir = getInstallDir(context);
-  const filePath = path.join(installDir, getExecutableName(process.platform));
-
-  try {
-    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-    console.log("Language server exists");
-  } catch {
-    console.log("Language server not found, downloading...");
-    await downloadLSP(context);
-
-    // Verify download succeeded
-    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-  }
-
-  console.log("Starting language server");
-  // TODO: Must be a better way?
-  var escapedPath = filePath.replace(/(\s)/, "\\ ");
-
-  // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
-  // Has the user defined a config file manually?
-  const configuration = vscode.workspace.getConfiguration();
-  // Make global constant for now as will reuse and build upon later
+/**
+ * Resolves initializationOptions for one vale-ls client, scoped to
+ * `workspaceRoot` (undefined outside a workspace-folder context).
+ */
+function buildValeConfig(
+  configuration: vscode.WorkspaceConfiguration,
+  workspaceRoot: string | undefined
+): Record<valeConfigOptions, valeArgs> {
   let valeFilter: valeArgs = { value: "" };
   let filters: string[] = [];
 
@@ -425,7 +426,6 @@ export async function activate(context: ExtensionContext) {
   }
 
   // Create combined filters
-  // TODO: Test with multiple filters
   if (filters.length > 0) {
     valeFilter = filters.join(" and ") as unknown as valeArgs;
   }
@@ -433,56 +433,154 @@ export async function activate(context: ExtensionContext) {
   // Get the config path as a string
   let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
 
-  // Resolve workspace folder
   let resolvedConfigPath = configPathRaw;
-  if (
-    vscode.workspace.workspaceFolders &&
-    vscode.workspace.workspaceFolders.length > 0
-  ) {
-    const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+  if (workspaceRoot) {
     resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
   }
 
-  let valeConfig: Record<valeConfigOptions, valeArgs> = {
+  return {
     configPath: resolvedConfigPath as unknown as valeArgs,
     syncOnStartup: configuration.get("vale.valeCLI.syncOnStartup") as valeArgs,
     filter: valeFilter as unknown as valeArgs,
     // TODO: Build into proper onboarding
     installVale: configuration.get("vale.valeCLI.installVale") as valeArgs,
   };
+}
 
-  // TODO: So do I need the below?
+/**
+ * Stops and forgets the client registered under `key`, if any. Used both to
+ * tear a folder's client down on removal and to guard against double
+ * activation.
+ */
+async function stopAndRemoveClient(key: string): Promise<void> {
+  const existing = clients.get(key);
+  if (!existing) {
+    return;
+  }
+  clients.delete(key);
+  try {
+    await existing.stop();
+  } catch (error) {
+    console.error("Error stopping Vale language client:", error);
+  }
+}
+
+/**
+ * Starts (or restarts) the vale-ls client for `folder`. With no `folder`
+ * (single-file / no-workspace mode), one unscoped client covers the whole
+ * window, matching the extension's pre-multi-root behavior.
+ */
+async function startClientForFolder(
+  escapedPath: string,
+  folder?: vscode.WorkspaceFolder
+): Promise<void> {
+  const key = clientKeyFor(folder);
+  await stopAndRemoveClient(key);
+
+  const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
+  const valeConfig = buildValeConfig(configuration, folder?.uri.fsPath);
+
   let tempArgs: never[] = [];
   let serverOptions: ServerOptions = {
     run: { command: escapedPath, args: tempArgs },
     debug: { command: escapedPath, args: tempArgs },
   };
 
-  // Options to control the language client
+  const documentSelector: LanguageClientOptions["documentSelector"] = folder
+    ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
+    : [{ scheme: "file", language: "*" }];
+
+  const fileWatcherPattern: vscode.GlobPattern = folder
+    ? new vscode.RelativePattern(folder, "**/.clientrc")
+    : "**/.clientrc";
+
   let clientOptions: LanguageClientOptions = {
-    // TODO: Refine
     initializationOptions: valeConfig,
-    documentSelector: [{ scheme: "file", language: "*" }],
+    documentSelector,
     synchronize: {
-      fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
+      fileEvents: workspace.createFileSystemWatcher(fileWatcherPattern),
     },
+    workspaceFolder: folder,
   };
 
-  // Create the language client and start the client.
-  client = new LanguageClient(
-    "vale",
-    "Vale VSCode",
-    serverOptions,
-    clientOptions
-  );
+  const clientId = folder ? `vale-${folder.uri.toString()}` : "vale";
+  const clientName = folder ? `Vale VSCode (${folder.name})` : "Vale VSCode";
+
+  const client = new LanguageClient(clientId, clientName, serverOptions, clientOptions);
+  clients.set(key, client);
 
   try {
     await client.start();
   } catch (err) {
     console.error(err);
-    vscode.window.showErrorMessage("Failed to start Vale Language Server");
+    vscode.window.showErrorMessage(
+      folder
+        ? `Failed to start Vale Language Server for workspace folder "${folder.name}"`
+        : "Failed to start Vale Language Server"
+    );
+    clients.delete(key);
     throw err;
   }
+}
+
+export async function activate(context: ExtensionContext) {
+  valeOutputChannel = vscode.window.createOutputChannel("Vale");
+  context.subscriptions.push(valeOutputChannel);
+
+  // Prevent multiple activations - stop existing clients if present
+  if (clients.size > 0) {
+    console.log("Vale language clients already active, stopping existing clients");
+    await Promise.all(Array.from(clients.keys()).map(stopAndRemoveClient));
+  }
+
+  const installDir = getInstallDir(context);
+  const filePath = path.join(installDir, getExecutableName(process.platform));
+
+  try {
+    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+    console.log("Language server exists");
+  } catch {
+    console.log("Language server not found, downloading...");
+    await downloadLSP(context);
+
+    // Verify download succeeded
+    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+  }
+
+  console.log("Starting language server(s)");
+  // TODO: Must be a better way?
+  var escapedPath = filePath.replace(/(\s)/, "\\ ");
+
+  // vale-ls doesn't support multi-root workspaces natively, so we start one
+  // client per workspace folder (each scoped to that folder's files and
+  // settings) rather than a single window-wide client. See
+  // `getRelevantWorkspaceFolder` for how commands pick which folder/client
+  // to act on, and the `onDidChangeWorkspaceFolders` listener below for how
+  // folders added/removed after startup are handled.
+  const folders = vscode.workspace.workspaceFolders;
+  if (folders && folders.length > 0) {
+    for (const folder of folders) {
+      await startClientForFolder(escapedPath, folder);
+    }
+  } else {
+    await startClientForFolder(escapedPath, undefined);
+  }
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(async (event) => {
+      for (const folder of event.removed) {
+        await stopAndRemoveClient(clientKeyFor(folder));
+      }
+      // The no-folder fallback client no longer applies once a real folder
+      // exists.
+      if (event.added.length > 0) {
+        await stopAndRemoveClient(noFolderClientKey());
+      }
+      for (const folder of event.added) {
+        await startClientForFolder(escapedPath, folder);
+      }
+    })
+  );
 
   // Register vocabulary commands
   const addToAcceptCommand = vscode.commands.registerCommand(
@@ -502,7 +600,10 @@ export async function activate(context: ExtensionContext) {
         return;
       }
 
-      // Get vocabulary path from settings
+      // Get vocabulary path from settings, scoped to the folder containing
+      // the active file so multi-root per-folder overrides are respected
+      const folder = getRelevantWorkspaceFolder();
+      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
       const vocabPath = configuration.get<string>("vale.vocabPath");
       if (!vocabPath) {
         vscode.window.showErrorMessage(
@@ -512,8 +613,7 @@ export async function activate(context: ExtensionContext) {
       }
 
       try {
-        // Use workspace root or file's directory as working directory for vale ls-config
-        const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+        const workingDir = folder?.uri.fsPath ??
                           path.dirname(editor.document.uri.fsPath);
         await addToVocabulary(word, vocabPath, "accept.txt", workingDir);
       } catch (error) {
@@ -541,7 +641,10 @@ export async function activate(context: ExtensionContext) {
         return;
       }
 
-      // Get vocabulary path from settings
+      // Get vocabulary path from settings, scoped to the folder containing
+      // the active file so multi-root per-folder overrides are respected
+      const folder = getRelevantWorkspaceFolder();
+      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
       const vocabPath = configuration.get<string>("vale.vocabPath");
       if (!vocabPath) {
         vscode.window.showErrorMessage(
@@ -551,8 +654,7 @@ export async function activate(context: ExtensionContext) {
       }
 
       try {
-        // Use workspace root or file's directory as working directory for vale ls-config
-        const workingDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+        const workingDir = folder?.uri.fsPath ??
                           path.dirname(editor.document.uri.fsPath);
         await addToVocabulary(word, vocabPath, "reject.txt", workingDir);
       } catch (error) {
@@ -567,7 +669,7 @@ export async function activate(context: ExtensionContext) {
   const runValeSync = async () => {
     try {
       const workingDir =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+        getRelevantWorkspaceFolder()?.uri.fsPath ?? process.cwd();
 
       valeOutputChannel.clear();
       valeOutputChannel.show(true);
@@ -593,7 +695,7 @@ export async function activate(context: ExtensionContext) {
     async () => {
       try {
         const workingDir =
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+          getRelevantWorkspaceFolder()?.uri.fsPath ?? process.cwd();
 
         valeOutputChannel.clear();
         valeOutputChannel.show(true);
@@ -622,8 +724,7 @@ export async function activate(context: ExtensionContext) {
 
       try {
         const workingDir =
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
-          path.dirname(filePath);
+          getRelevantWorkspaceFolder()?.uri.fsPath ?? path.dirname(filePath);
 
         valeOutputChannel.clear();
         valeOutputChannel.show(true);
@@ -663,14 +764,6 @@ export async function activate(context: ExtensionContext) {
 }
 
 export async function deactivate(): Promise<void> {
-  if (!client) {
-    return;
-  }
-
-  try {
-    await client.stop();
-    console.log("Vale language server stopped");
-  } catch (error) {
-    console.error("Error stopping Vale language server:", error);
-  }
+  await Promise.all(Array.from(clients.keys()).map(stopAndRemoveClient));
+  console.log("Vale language server(s) stopped");
 }
