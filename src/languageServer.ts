@@ -207,8 +207,8 @@ export async function startClientForFolder(
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
   const valeConfig = buildValeConfig(configuration, folder?.uri.fsPath);
 
-  let tempArgs: never[] = [];
-  let serverOptions: ServerOptions = {
+  const tempArgs: never[] = [];
+  const serverOptions: ServerOptions = {
     run: { command: escapedPath, args: tempArgs },
     debug: { command: escapedPath, args: tempArgs },
   };
@@ -221,7 +221,7 @@ export async function startClientForFolder(
     ? new vscode.RelativePattern(folder, "**/.clientrc")
     : "**/.clientrc";
 
-  let clientOptions: LanguageClientOptions = {
+  const clientOptions: LanguageClientOptions = {
     initializationOptions: valeConfig,
     documentSelector,
     synchronize: {

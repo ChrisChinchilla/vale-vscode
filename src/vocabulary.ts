@@ -72,7 +72,7 @@ export async function addToVocabulary(
   let fileContent = "";
   try {
     fileContent = await readFile(vocabFile, "utf-8");
-  } catch (error) {
+  } catch {
     // File doesn't exist yet, will be created
   }
 

@@ -111,9 +111,9 @@ export function registerCommands(context: ExtensionContext): void {
 
       valeOutputChannel.appendLine("\nSync completed successfully.");
       vscode.window.showInformationMessage("Vale: Sync completed successfully");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Vale sync failed:", error);
-      const errorMessage = error.message || String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
     }
   };

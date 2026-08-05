@@ -93,23 +93,25 @@ The current settings appear lexicographically because they have no explicit orde
 
 ## Dependency and CI proposal
 
-- [ ] Upgrade `vscode-languageclient` from 9.0.1 to 10.1.0.
-- [ ] Replace `vscode-test` with `@vscode/test-electron@3.1.0`.
-- [ ] Remove unused `@aws-sdk/client-s3`, `@types/which`, TSLint, and likely Mocha.
-- [ ] Add a real ESLint flat configuration; ESLint currently exits because none exists.
-- [ ] Update Webpack, TypeScript ESLint, ESLint, and related tooling after removing unused packages.
-- [ ] Prefer Node’s built-in test runner for pure unit tests.
-- [ ] Consider replacing Webpack/ts-loader with a smaller esbuild setup. The current production build takes about six seconds, produces approximately 984 KB across ten files, and emits a dynamic-require warning.
-- [ ] Add `@vscode/vsce` as a pinned development dependency instead of globally installing its latest version in CI.
-- [ ] Upgrade CodeQL actions from retired `v2` to `v3` in [`.github/workflows/codeql.yml:29`](.github/workflows/codeql.yml#L29). CodeQL v2 has been retired since January 2025. [GitHub announcement](https://github.blog/changelog/2025-01-10-code-scanning-codeql-action-v2-is-now-deprecated/)
-- [ ] Consolidate build, test, package, and publish so publishing cannot bypass validation.
+- [x] Upgrade `vscode-languageclient` from 9.0.1 to 10.1.0. Already done (landed as part of an earlier "remove the runtime dependency advisory" fix); this item was stale.
+- [x] Replace `vscode-test` with `@vscode/test-electron@3.1.0`. Investigated: `vscode-test` was unused anywhere in scripts or source (no integration test suite exists), so it was removed outright rather than swapped — nothing currently exercises it, and adding `@vscode/test-electron` with no test suite to run would just be a second unused dependency. Revisit if/when an actual extension-host integration test suite is added.
+- [x] Remove unused `@aws-sdk/client-s3`, `@types/which`, TSLint, and likely Mocha. Removed `@aws-sdk/client-s3`, `@types/which`, `tslint` (and its orphaned `tslint.json`), `mocha`, `@types/mocha`. `@aws-sdk/client-s3` turned out to be needed at *build* time (not runtime): `unzipper`'s `Open/index.js` has a lazy `require("@aws-sdk/client-s3")` in its unused S3 code path, which webpack tries to statically resolve. Fixed by marking it `external` in `webpack.config.js` instead of reinstalling it — this also dropped several dozen unused AWS SDK chunk files that were previously being bundled into every release (`dist/` went from ~984 KB/many files to a single 603 KB `extension.js`).
+- [x] Add a real ESLint flat configuration; ESLint currently exits because none exists. Added `eslint.config.mjs` using `@typescript-eslint`'s `flat/recommended` config, plus an `npm run lint` script. Fixed the 7 findings it surfaced (an `any`-typed catch, unused `prefer-const`s, an unused `catch` binding, a `require()` in `webpack.config.js` — the last one is intentionally allowed via a targeted override since that file is genuinely CommonJS).
+- [x] Update Webpack, TypeScript ESLint, ESLint, and related tooling after removing unused packages. `npm install` picked up the latest versions already satisfying existing `^` ranges (webpack, ts-loader, eslint, `@typescript-eslint/*`); `webpack-cli` needed an explicit major bump (`^6.0.1` → `^7.2.2`) since 7.x requires it.
+- [x] Prefer Node's built-in test runner for pure unit tests. Already the case (`npm test` runs `node --test` over `tsc -p tsconfig.test.json` output) — no action needed.
+- [ ] Consider replacing Webpack/ts-loader with a smaller esbuild setup. Explicitly deferred (owner's call) — this was hedged as "consider," not a firm requirement, and the current Webpack build now runs cleanly (~2.7s, single 603 KB file, no warnings) after the `@aws-sdk/client-s3` externals fix above.
+- [x] Add `@vscode/vsce` as a pinned development dependency instead of globally installing its latest version in CI. Added as a devDependency; `build.yaml` no longer does `npm install -g typescript @vscode/vsce` (both were already/now available via `npm ci`). Added `npm run package` (`vsce package`) as the canonical local/CI packaging command.
+- [x] Upgrade CodeQL actions from retired `v2` to `v3` in [`.github/workflows/codeql.yml:29`](.github/workflows/codeql.yml#L29). CodeQL v2 has been retired since January 2025. [GitHub announcement](https://github.blog/changelog/2025-01-10-code-scanning-codeql-action-v2-is-now-deprecated/) Also bumped `actions/checkout` from `v3` to `v4` in the same file for consistency with the other workflows.
+- [x] Consolidate build, test, package, and publish so publishing cannot bypass validation. `build.yaml` is now a reusable workflow (`workflow_call`) running compile → lint → test → webpack → package; `publishTags.yml` calls it as a `validate` job that `deploy` `needs`, so a tag push can no longer reach the marketplace publish steps if any of those fail. While verifying `vsce package` output, found `.vscodeignore` didn't exclude `out/`, `out-test/`, `.claude/`, `.github/`, or a stray local `vale-ls` binary — any of those (including a large accidentally-present binary) could have shipped in a release VSIX. Fixed; packaged VSIX dropped from 3.92 MB/39 files to 150 KB/8 files.
 
 ## Current validation state
 
 - TypeScript `--noEmit`: passes.
-- Production Webpack build: passes with one warning.
-- Tests: `npm test` now runs `src/utils.test.ts` (pure, `vscode`-free helpers) via `tsc -p tsconfig.test.json` + Node's built-in test runner. `src/lsp.ts` still has no test coverage — it imports `vscode` at load time and needs the extension host (or a mock) to test directly.
-- Linting: unavailable because there is no ESLint configuration.
+- Production Webpack build: passes cleanly, no warnings (`npm run webpack`).
+- Lint: `npm run lint` (ESLint flat config) passes with no findings.
+- Tests: `npm test` runs `src/utils.test.ts` (pure, `vscode`-free helpers) via `tsc -p tsconfig.test.json` + Node's built-in test runner (27 tests). No module importing `vscode` at load time has direct test coverage — that needs the extension host (or a mock) to test directly; see `src/*.ts` module split in `.claude/notes/module-split.md` for where such logic could be extracted from if this becomes worth doing.
+- Packaging: `npm run package` (`vsce package`, using the pinned `@vscode/vsce` devDependency) produces a clean VSIX (~150 KB, 8 files) via `.vscodeignore`.
+- `npm run validate` runs compile + lint + test + webpack in one shot, matching CI's `build.yaml`.
 - Working tree before creating this report: clean.
 
 ## Recommended implementation order

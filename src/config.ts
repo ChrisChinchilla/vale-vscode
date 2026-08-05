@@ -30,7 +30,7 @@ export function buildValeConfig(
   );
 
   // Get the config path as a string
-  let configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
+  const configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
 
   let resolvedConfigPath = configPathRaw;
   if (workspaceRoot) {
