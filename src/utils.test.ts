@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
   EXPECTED_CHECKSUMS,
   buildDownloadAssetName,
+  buildValeFilterExpression,
   buildValeSpawnOptions,
   detectArch,
   detectPlatform,
@@ -120,6 +121,47 @@ describe("buildValeSpawnOptions", () => {
     const options = buildValeSpawnOptions("/some/workspace");
     assert.equal(options.cwd, "/some/workspace");
     assert.equal("shell" in options, false);
+  });
+});
+
+describe("buildValeFilterExpression", () => {
+  test("no filter when minAlertLevel is inherited and spellcheck is enabled", () => {
+    assert.equal(buildValeFilterExpression("inherited", true), "");
+  });
+
+  test("filters by suggestion level and up", () => {
+    assert.equal(
+      buildValeFilterExpression("suggestion", true),
+      `.Level in ["suggestion", "warning", "error"]`
+    );
+  });
+
+  test("filters by warning level and up", () => {
+    assert.equal(
+      buildValeFilterExpression("warning", true),
+      `.Level in ["warning", "error"]`
+    );
+  });
+
+  test("filters by error level only", () => {
+    assert.equal(
+      buildValeFilterExpression("error", true),
+      `.Level in ["error"]`
+    );
+  });
+
+  test("excludes spelling when spellcheck is disabled", () => {
+    assert.equal(
+      buildValeFilterExpression("inherited", false),
+      `.Extends != "spelling"`
+    );
+  });
+
+  test("combines alert level and spellcheck filters", () => {
+    assert.equal(
+      buildValeFilterExpression("warning", false),
+      `.Level in ["warning", "error"] and .Extends != "spelling"`
+    );
   });
 });
 

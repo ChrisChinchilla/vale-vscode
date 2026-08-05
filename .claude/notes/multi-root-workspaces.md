@@ -19,8 +19,10 @@ describes for servers without native multi-root support: run one
 `LanguageClient` per workspace folder, each restricted via `documentSelector`
 (and the `workspaceFolder` client option) to that folder's files, with its
 own `initializationOptions` resolved from that folder's settings. That's the
-approach taken here (`src/lsp.ts`, `startClientForFolder` /
-`buildValeConfig`).
+approach taken here (`src/languageServer.ts`'s `startClientForFolder`, using
+`src/config.ts`'s `buildValeConfig`). This logic originally landed directly
+in `src/lsp.ts` and was later split out into these modules - see
+`module-split.md`.
 
 ## What changed
 

@@ -87,6 +87,32 @@ export function buildValeSpawnOptions(
   return { cwd };
 }
 
+/**
+ * Builds the combined Vale filter expression `vale.valeCLI.minAlertLevel`
+ * and `vale.enableSpellcheck` translate to, since vale-ls only accepts a
+ * single `filter` option rather than these two legacy settings directly.
+ */
+export function buildValeFilterExpression(
+  minAlertLevel: string,
+  enableSpellcheck: boolean
+): string {
+  const filters: string[] = [];
+
+  if (minAlertLevel === "suggestion") {
+    filters.push(`.Level in ["suggestion", "warning", "error"]`);
+  } else if (minAlertLevel === "warning") {
+    filters.push(`.Level in ["warning", "error"]`);
+  } else if (minAlertLevel === "error") {
+    filters.push(`.Level in ["error"]`);
+  }
+
+  if (!enableSpellcheck) {
+    filters.push(`.Extends != "spelling"`);
+  }
+
+  return filters.join(" and ");
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

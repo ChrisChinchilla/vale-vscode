@@ -2,8 +2,29 @@
 
 VS Code extension for [Vale](https://vale.sh). Wraps the [Vale Language
 Server](https://github.com/errata-ai/vale-ls) (`vale-ls`) and the `vale` CLI.
-Almost all extension logic lives in [`src/lsp.ts`](../src/lsp.ts); pure,
-`vscode`-free helpers live in [`src/utils.ts`](../src/utils.ts).
+
+[`src/lsp.ts`](../src/lsp.ts) is only a thin re-export (the webpack entry
+point / extension host entry); the actual logic is split by concern:
+
+- [`src/lifecycle.ts`](../src/lifecycle.ts) - `activate`/`deactivate`, wiring
+  the other modules together.
+- [`src/languageServer.ts`](../src/languageServer.ts) - downloading/
+  installing vale-ls and managing one `LanguageClient` per workspace folder.
+- [`src/config.ts`](../src/config.ts) - resolving a folder's settings into
+  vale-ls `initializationOptions`.
+- [`src/cli.ts`](../src/cli.ts) - direct `vale` CLI invocations (`sync`,
+  `ls-config`, `ls-metrics`).
+- [`src/vocabulary.ts`](../src/vocabulary.ts) - reading/writing Vale
+  vocabulary files.
+- [`src/commands.ts`](../src/commands.ts) - registers the command
+  palette/editor-menu commands.
+- [`src/ui.ts`](../src/ui.ts) - the output channel and the "Vale" Explorer
+  sidebar tree view.
+- [`src/workspaceFolders.ts`](../src/workspaceFolders.ts) - shared
+  workspace-folder identity helpers (used by both `languageServer.ts` and
+  `commands.ts`).
+
+Pure, `vscode`-free helpers live in [`src/utils.ts`](../src/utils.ts).
 
 ## Working agreement
 
@@ -25,12 +46,12 @@ Almost all extension logic lives in [`src/lsp.ts`](../src/lsp.ts); pure,
   (compiled via `tsconfig.test.json` to `out-test/`, CommonJS, no `vscode`
   dependency).
 - Only `src/utils.ts` (and future similarly pure modules) can be unit tested
-  this way, because `src/lsp.ts` imports the `vscode` module at load time,
-  which only exists inside the real extension host. When adding testable
-  logic, prefer extracting it into `utils.ts` as a pure function over adding
-  it directly to `lsp.ts`.
-- `npm run compile` / `tsc --noEmit` type-checks the whole extension
-  (including `lsp.ts`) against `@types/vscode`.
+  this way, because every other module imports the `vscode` module at load
+  time, which only exists inside the real extension host. When adding
+  testable logic, prefer extracting it into `utils.ts` as a pure function
+  over adding it directly to a `vscode`-dependent module.
+- `npm run compile` / `tsc --noEmit` type-checks the whole extension against
+  `@types/vscode`.
 
 ## Build
 

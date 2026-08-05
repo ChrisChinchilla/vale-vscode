@@ -80,7 +80,7 @@ The current settings appear lexicographically because they have no explicit orde
 
 ## Efficiency and code structure
 
-- [ ] Split the 653-line [`src/lsp.ts`](src/lsp.ts) into lifecycle, configuration, language-server management, CLI execution, vocabulary, commands, and UI modules.
+- [x] Split the 653-line [`src/lsp.ts`](src/lsp.ts) into lifecycle, configuration, language-server management, CLI execution, vocabulary, commands, and UI modules. `src/lsp.ts` is now a thin re-export; see `src/lifecycle.ts`, `src/config.ts`, `src/languageServer.ts`, `src/cli.ts`, `src/vocabulary.ts`, `src/commands.ts`, `src/ui.ts`, and `src/workspaceFolders.ts`.
 - [ ] Remove duplicated accept/reject handlers and centralize error formatting and workspace resolution.
 - [ ] Start the language server lazily when a relevant document or Vale command is used instead of on every `onStartupFinished`.
 - [ ] Restrict the current `language: "*"` document selector. It presently sends every local file’s full content to the server on edits.
