@@ -22,6 +22,8 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
+On first launch the extension downloads the [Vale Language Server](https://github.com/errata-ai/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). If you're upgrading from an older version of this extension, expect a one-time re-download the first time you activate it after upgrading.
+
 ## Features
 
 At the moment, the extension uses any [configuration](https://vale.sh/docs/topics/config/), [vocabularies](https://vale.sh/docs/topics/vocab/), and [packages](https://vale.sh/docs/topics/packages/) defined in your Vale configuration. If you experience any issues with the extension, check if Vale runs as expected on the command line first.

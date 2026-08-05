@@ -1,12 +1,23 @@
 import { workspace, ExtensionContext } from "vscode";
 import * as vscode from "vscode";
 
-import { writeFile, readFile, mkdir, appendFile } from "node:fs/promises";
-import { Readable } from "node:stream";
+import { readFile, mkdir, appendFile, rename, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import * as unzipper from "unzipper";
 import fs from "fs";
 import * as path from "path";
+
+import {
+  LSP_TAG,
+  buildDownloadAssetName,
+  buildValeSpawnOptions,
+  detectArch,
+  detectPlatform,
+  getExecutableName,
+  getExpectedChecksum,
+  resolveConfigPath,
+  sha256Hex,
+} from "./utils";
 
 import {
   LanguageClient,
@@ -68,38 +79,57 @@ class ValeCommandsProvider
   }
 }
 
-export function getArch(): String | null {
-  if (process.arch == "x64") return "x86_64";
-  else if (process.arch == "arm64") return "aarch64";
-  else {
+export function getArch(): string | null {
+  const arch = detectArch(process.arch);
+  if (arch === null) {
     vscode.window.showErrorMessage("Unsupported architecture: " + process.arch);
-    return null;
   }
+  return arch;
 }
 
-export function getPlatform(): String | null {
-  if (process.platform == "darwin") return "apple-darwin";
-  else if (process.arch == "arm64" && process.platform == "win32")
-    return "pc-windows-msvc";
-  else if (process.arch == "x64" && process.platform == "win32")
-    return "pc-windows-gnu";
-  else if (process.platform == "linux") return "unknown-linux-gnu";
-  else {
+export function getPlatform(): string | null {
+  const platform = detectPlatform(process.platform, process.arch);
+  if (platform === null) {
     vscode.window.showErrorMessage("Unsupported platform: " + process.platform);
-    return null;
   }
+  return platform;
+}
+
+/**
+ * Resolves the local directory the language server binary is installed
+ * into. Uses the extension's global storage, which VS Code guarantees is
+ * writable, instead of the read-only extension install directory.
+ */
+export function getInstallDir(context: ExtensionContext): string {
+  return context.globalStorageUri.fsPath;
 }
 
 async function downloadLSP(context: ExtensionContext): Promise<void> {
-  const TAG = "v0.4.0";
-  let URL: string;
-  if (getArch() == "arm64" && getPlatform() == "win32") {
-    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-aarch64-pc-windows-msvc.zip`;
-  } else {
-    URL = `https://github.com/errata-ai/vale-ls/releases/download/${TAG}/vale-ls-${getArch()}-${getPlatform()}.zip`;
+  const assetName = buildDownloadAssetName(process.platform, process.arch);
+  if (!assetName) {
+    vscode.window.showErrorMessage(
+      `Unsupported platform/architecture: ${process.platform}/${process.arch}`
+    );
+    throw new Error("Unable to determine download for this platform.");
   }
-  const extStorage = context.extensionPath;
-  const tmpZip = path.join(extStorage, "vale-ls.zip");
+
+  const expectedChecksum = getExpectedChecksum(assetName);
+  if (!expectedChecksum) {
+    throw new Error(
+      `No known checksum for ${assetName} (${LSP_TAG}); refusing to install an unverifiable binary.`
+    );
+  }
+
+  const URL = `https://github.com/errata-ai/vale-ls/releases/download/${LSP_TAG}/${assetName}`;
+  const installDir = getInstallDir(context);
+  await mkdir(installDir, { recursive: true });
+
+  const executableName = getExecutableName(process.platform);
+  const finalPath = path.join(installDir, executableName);
+  const tmpPath = path.join(
+    installDir,
+    `.${executableName}.download-${process.pid}-${Date.now()}`
+  );
 
   try {
     vscode.window.showInformationMessage(
@@ -107,28 +137,49 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
     );
 
     const response = await fetch(URL);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download ${assetName}: HTTP ${response.status} ${response.statusText}`
+      );
+    }
     if (!response.body) {
       throw new Error("Failed to fetch the response body.");
     }
 
-    const stream = Readable.fromWeb(response.body);
-    await writeFile(tmpZip, stream);
+    const buffer = Buffer.from(await response.arrayBuffer());
 
-    const directory = await unzipper.Open.file(tmpZip);
-    await directory.extract({ path: extStorage });
-    // Handle Windows
-    // TODO: Is there a better way to handle this?
-    if (process.platform === "win32") {
-      await fs.promises.chmod(path.join(extStorage, "vale-ls.exe"), 0o755);
-    } else {
-      await fs.promises.chmod(path.join(extStorage, "vale-ls"), 0o755);
+    const expectedLength = response.headers.get("content-length");
+    if (expectedLength && buffer.length !== Number(expectedLength)) {
+      throw new Error(
+        `Download size mismatch for ${assetName}: expected ${expectedLength} bytes, got ${buffer.length}.`
+      );
     }
-    await fs.promises.unlink(tmpZip);
+
+    const actualChecksum = sha256Hex(buffer);
+    if (actualChecksum !== expectedChecksum) {
+      throw new Error(
+        `Checksum mismatch for ${assetName}: expected ${expectedChecksum}, got ${actualChecksum}.`
+      );
+    }
+
+    const directory = await unzipper.Open.buffer(buffer);
+    const entry = directory.files.find((file) => file.path === executableName);
+    if (!entry) {
+      throw new Error(
+        `Archive ${assetName} did not contain the expected ${executableName} entry.`
+      );
+    }
+
+    const executableBuffer = await entry.buffer();
+    await fs.promises.writeFile(tmpPath, executableBuffer, { mode: 0o755 });
+    await fs.promises.chmod(tmpPath, 0o755);
+    await rename(tmpPath, finalPath);
 
     vscode.window.showInformationMessage(
       "First launch: Vale Language Server downloaded"
     );
   } catch (error) {
+    await rm(tmpPath, { force: true });
     console.error("Download failed:", error);
     throw error;
   }
@@ -149,10 +200,11 @@ interface valeArgs {
  */
 async function getStylesPathsFromVale(workspaceRoot: string): Promise<string | null> {
   return new Promise((resolve) => {
-    const valeProcess = spawn("vale", ["ls-config"], {
-      cwd: workspaceRoot,
-      shell: true,
-    });
+    const valeProcess = spawn(
+      "vale",
+      ["ls-config"],
+      buildValeSpawnOptions(workspaceRoot)
+    );
 
     let stdout = "";
     let stderr = "";
@@ -283,27 +335,6 @@ async function addToVocabulary(
   );
 }
 
-function resolveConfigPath(
-  configPathRaw: string,
-  workspaceRoot: string
-): string {
-  let resolvedConfigPath = configPathRaw;
-
-  if (configPathRaw.includes("${workspaceFolder}")) {
-    resolvedConfigPath = configPathRaw.replace(
-      /\$\{workspaceFolder\}/g,
-      workspaceRoot
-    );
-  } else if (
-    configPathRaw.startsWith("./") ||
-    (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
-  ) {
-    resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
-  }
-
-  return resolvedConfigPath;
-}
-
 /**
  * Runs a Vale CLI command and streams the output to the Vale output channel.
  */
@@ -312,10 +343,7 @@ async function runValeCommand(
   workingDir: string
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const valeProcess = spawn("vale", args, {
-      cwd: workingDir,
-      shell: true,
-    });
+    const valeProcess = spawn("vale", args, buildValeSpawnOptions(workingDir));
 
     valeProcess.stdout.on("data", (data) => {
       valeOutputChannel.append(data.toString());
@@ -351,13 +379,9 @@ export async function activate(context: ExtensionContext) {
     }
   }
 
-  let filePath = path.join(context.extensionPath, "vale-ls");
+  const installDir = getInstallDir(context);
+  const filePath = path.join(installDir, getExecutableName(process.platform));
 
-  // Handle Windows
-  // TODO: Is there a better way to handle this?
-  if (process.platform === "win32") {
-    filePath = path.join(context.extensionPath, "vale-ls.exe");
-  }
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
     console.log("Language server exists");
@@ -370,9 +394,8 @@ export async function activate(context: ExtensionContext) {
   }
 
   console.log("Starting language server");
-  const valePath = path.join(context.extensionPath, "vale-ls");
   // TODO: Must be a better way?
-  var escapedPath = valePath.replace(/(\s)/, "\\ ");
+  var escapedPath = filePath.replace(/(\s)/, "\\ ");
 
   // TODO: Factor in https://vale.sh/docs/integrations/guide/#vale-ls
   // Has the user defined a config file manually?
