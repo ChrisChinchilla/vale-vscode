@@ -204,13 +204,19 @@ export async function startClientForFolder(
   const key = clientKeyFor(folder);
   await stopAndRemoveClient(key);
 
+  const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-  const valeConfig = buildValeConfig(configuration, folder?.uri.fsPath);
+  const valeConfig = buildValeConfig(configuration, workspaceRoot);
 
   const tempArgs: never[] = [];
+  // vale-ls resolves vale.ini's file-glob sections (e.g. `[docs/**/*.md]`)
+  // relative to its own working directory. Without an explicit `cwd` here,
+  // Node defaults the child process to the extension host's cwd rather than
+  // the workspace folder, so those sections silently never match. See #73.
+  const executableOptions = workspaceRoot ? { cwd: workspaceRoot } : undefined;
   const serverOptions: ServerOptions = {
-    run: { command: escapedPath, args: tempArgs },
-    debug: { command: escapedPath, args: tempArgs },
+    run: { command: escapedPath, args: tempArgs, options: executableOptions },
+    debug: { command: escapedPath, args: tempArgs, options: executableOptions },
   };
 
   const documentSelector: LanguageClientOptions["documentSelector"] = folder
