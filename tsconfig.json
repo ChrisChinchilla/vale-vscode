@@ -2,7 +2,7 @@
 
 	"compilerOptions": {
 		"module": "es2022",
-		"moduleResolution": "node",
+		"moduleResolution": "bundler",
 		"target": "es2017",
 		"esModuleInterop": true,
 		"outDir": "out",
