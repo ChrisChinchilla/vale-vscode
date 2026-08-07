@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   build:
@@ -15,11 +16,15 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-      - name: Install global dependencies
-        run: npm install -g typescript @vscode/vsce
-      - name: npm-ci
+      - name: npm ci
         run: npm ci
-      - name: npm-compile
+      - name: Compile
         run: npm run compile
-      - name: vsce package
-        run: vsce package
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Webpack (production bundle)
+        run: npm run webpack
+      - name: Package extension
+        run: npm run package

@@ -22,6 +22,8 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
+On first launch the extension downloads the [Vale Language Server](https://github.com/errata-ai/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). If you're upgrading from an older version of this extension, expect a one-time re-download the first time you activate it after upgrading.
+
 ## Features
 
 At the moment, the extension uses any [configuration](https://vale.sh/docs/topics/config/), [vocabularies](https://vale.sh/docs/topics/vocab/), and [packages](https://vale.sh/docs/topics/packages/) defined in your Vale configuration. If you experience any issues with the extension, check if Vale runs as expected on the command line first.
@@ -70,6 +72,14 @@ The following commands are available from the **Vale** panel in the Explorer sid
 You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting to name the vocabulary to write to. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
 
 Spelling alerts also offer an "Add to vocabulary" quick fix, one per vocabulary defined in your configuration, which needs no `vale.vocabPath`. Rejecting a word is only available as a command.
+
+### Multi-root workspaces
+
+The extension starts a separate Vale Language Server instance per workspace folder, each scoped to that folder's files. This means:
+
+- Settings such as `vale.valeCLI.config` and `vale.vocabPath` can be set per folder (e.g. in each folder's `.vscode/settings.json`) and are resolved relative to that folder, including `${workspaceFolder}` in `vale.valeCLI.config`.
+- Commands run from the **Vale** panel or command palette (**Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary commands) act on the workspace folder containing the currently active file, not always the first folder in the workspace.
+- Adding or removing a folder from the workspace starts or stops its Vale Language Server instance automatically, without needing to reload the window.
 
 ## Settings
 
