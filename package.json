@@ -38,6 +38,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "vale.install",
+        "title": "Vale: Install or Update Vale",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "vale.addToAcceptList",
         "title": "Vale: Add to Accept List"
       },
@@ -108,6 +113,31 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user's $PATH. And you need an accessible .vale.ini. file."
+        },
+        "vale.valeCLI.path": {
+          "scope": "resource",
+          "type": "string",
+          "default": null,
+          "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`."
+        },
+        "vale.valeCLI.lintOnChange": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Lint as you type, rather than only when a file is saved."
+        },
+        "vale.valeCLI.debounceMs": {
+          "scope": "resource",
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "markdownDescription": "How long typing has to settle before linting, in milliseconds. Only applies when `#vale.valeCLI.lintOnChange#` is enabled."
+        },
+        "vale.valeCLI.showMetrics": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Show a code lens with the document's metrics (word count, reading time, and so on)."
         },
         "vale.valeCLI.minAlertLevel": {
           "scope": "resource",

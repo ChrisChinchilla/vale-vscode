@@ -9,11 +9,12 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 ## Important notes on switch to Vale Language Server as of v0.30.0
 
 > [!NOTE]
-> This new release uses the [Vale Language Server](https://github.com/errata-ai/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
+> This new release uses the [Vale Language Server](https://github.com/vale-cli/vale-ls). This allows for tighter integration with Vale features, but does involve more platform specific work and some features of the old extension are harder to implement.
 > I based re-development of these features [on this survey](https://github.com/ChrisChinchilla/vale-vscode/discussions/50). If you find features you use no longer working, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues/new).
 
-> [!WARNING]
-> The Vale Language Server has no support for custom Vale binary paths. I am attempting to find a solution to this.
+> [!NOTE]
+> Custom Vale binary paths are supported as of Vale Language Server v0.5.0 — see `vale.valeCLI.path`.
+> That release also tracks every folder in a multi-root workspace and resolves each file against the folder it belongs to, which should address the workspace problems reported here.
 
 ## Installation
 
@@ -61,13 +62,16 @@ The extension doesn't support adding words to dictionaries. For now, the best op
 
 The following commands are available from the **Vale** panel in the Explorer sidebar and from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>):
 
-- **Vale: Sync** runs `vale sync` to download and update packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Sync** downloads and updates the packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
+- **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages.
 - **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
-- **Vale: Show Readability Metrics** runs `vale ls-metrics` for the active file and displays its readability metrics in the Vale output panel.
+- **Vale: Show Readability Metrics** reports the active file's readability metrics.
 
 ### Add to Vale vocabulary
 
-You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
+You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting to name the vocabulary to write to. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.
+
+Spelling alerts also offer an "Add to vocabulary" quick fix, one per vocabulary defined in your configuration, which needs no `vale.vocabPath`. Rejecting a word is only available as a command.
 
 ### Multi-root workspaces
 
@@ -88,3 +92,7 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.enableSpellcheck` (default: `false`): Enable in-built spell checking for any `Spelling` styles.
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
+- `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages.
+- `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved.
+- `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled.
+- `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on).
