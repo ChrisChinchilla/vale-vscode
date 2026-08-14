@@ -30,7 +30,7 @@
 
 - [ ] **Validate vocabulary input.** Vocabulary names accept traversal components such as `../../…`, and multiline selections can corrupt vocabulary files.
 
-- [ ] **Apply settings changes.** Settings are read once during activation. Changing configuration does not update or restart the language server. Upstream `vale-ls` acknowledges configuration events but does not apply them, so the extension must restart it.
+- [x] **Apply settings changes.** Settings are read once during activation. Changing configuration does not update or restart the language server. Upstream `vale-ls` acknowledges configuration events but does not apply them, so the extension must restart it. Fixed via `registerConfigurationWatcher` in [`src/languageServer.ts`](src/languageServer.ts), which restarts the affected folder's (or no-folder) client when a setting feeding `buildValeConfig` changes.
 
 - [x] **Support multi-root workspaces correctly.** Multi-root operations always use the first workspace folder, regardless of the active file. Upstream multi-root change handling is also currently a no-op. Fixed by running one `LanguageClient` per workspace folder (vale-ls has no native multi-root support), with commands resolving the folder from the active editor and `onDidChangeWorkspaceFolders` starting/stopping clients as folders change. See `.claude/notes/multi-root-workspaces.md`.
 

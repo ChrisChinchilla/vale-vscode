@@ -315,3 +315,47 @@ export function registerWorkspaceFolderWatcher(
     })
   );
 }
+
+/**
+ * Settings that feed `buildValeConfig`'s `initializationOptions`. Since
+ * those options are only read once, at client-start time, changing any of
+ * these previously required a full window reload to take effect. See #35.
+ */
+const VALE_CONFIG_SETTINGS = [
+  "vale.enableSpellcheck",
+  "vale.valeCLI.minAlertLevel",
+  "vale.valeCLI.config",
+  "vale.valeCLI.syncOnStartup",
+  "vale.valeCLI.installVale",
+];
+
+/**
+ * Restarts the affected client(s) when a setting that feeds
+ * `initializationOptions` changes, so the change takes effect immediately
+ * instead of requiring "Reload Window".
+ */
+export function registerConfigurationWatcher(
+  context: ExtensionContext,
+  serverPath: string
+): void {
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
+      const folders = vscode.workspace.workspaceFolders;
+      if (folders && folders.length > 0) {
+        for (const folder of folders) {
+          if (
+            VALE_CONFIG_SETTINGS.some((setting) =>
+              event.affectsConfiguration(setting, folder.uri)
+            )
+          ) {
+            await startClientForFolder(serverPath, folder);
+          }
+        }
+      } else if (
+        VALE_CONFIG_SETTINGS.some((setting) => event.affectsConfiguration(setting))
+      ) {
+        await startClientForFolder(serverPath, undefined);
+      }
+    })
+  );
+}
