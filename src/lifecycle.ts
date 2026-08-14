@@ -9,6 +9,7 @@ import {
   stopAllClients,
 } from "./languageServer";
 import { registerCommands } from "./commands";
+import { registerCodeActions } from "./codeActions";
 
 /**
  * Extension activation/deactivation - wires the other modules together but
@@ -23,13 +24,14 @@ export async function activate(context: ExtensionContext): Promise<void> {
     await stopAllClients();
   }
 
-  const escapedPath = await ensureLanguageServerBinary(context);
+  const serverPath = await ensureLanguageServerBinary(context);
 
   console.log("Starting language server(s)");
-  await startClientsForCurrentWorkspace(escapedPath);
-  registerWorkspaceFolderWatcher(context, escapedPath);
+  await startClientsForCurrentWorkspace(serverPath);
+  registerWorkspaceFolderWatcher(context, serverPath);
 
   registerCommands(context);
+  registerCodeActions(context);
 
   // Note: we don't run `vale sync` here even when `vale.valeCLI.syncOnStartup`
   // is enabled - that setting is passed to vale-ls via `initializationOptions`

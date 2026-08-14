@@ -17,6 +17,7 @@ import {
 } from "./utils";
 import { buildValeConfig } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
+import { isServerReplaceFix } from "./codeActions";
 
 import {
   LanguageClient,
@@ -143,7 +144,7 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
 
 /**
  * Ensures the vale-ls binary is installed (downloading it on first use),
- * and returns its escaped path for use as the language client's command.
+ * and returns its path for use as the language client's command.
  */
 export async function ensureLanguageServerBinary(
   context: ExtensionContext
@@ -162,8 +163,12 @@ export async function ensureLanguageServerBinary(
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
   }
 
-  // TODO: Must be a better way?
-  return filePath.replace(/(\s)/, "\\ ");
+  // LanguageClient spawns this command directly (no shell), so it needs the
+  // literal, unescaped path - a backslash-escaped space (as you'd type at a
+  // shell prompt) isn't part of the real filename and fails with ENOENT.
+  // This install directory (context.globalStorageUri.fsPath) commonly
+  // contains a space, e.g. macOS's ".../Application Support/...".
+  return filePath;
 }
 
 export function hasActiveClients(): boolean {
@@ -198,7 +203,7 @@ export async function stopAllClients(): Promise<void> {
  * window, matching the extension's pre-multi-root behavior.
  */
 export async function startClientForFolder(
-  escapedPath: string,
+  serverPath: string,
   folder?: vscode.WorkspaceFolder
 ): Promise<void> {
   const key = clientKeyFor(folder);
@@ -215,8 +220,8 @@ export async function startClientForFolder(
   // the workspace folder, so those sections silently never match. See #73.
   const executableOptions = workspaceRoot ? { cwd: workspaceRoot } : undefined;
   const serverOptions: ServerOptions = {
-    run: { command: escapedPath, args: tempArgs, options: executableOptions },
-    debug: { command: escapedPath, args: tempArgs, options: executableOptions },
+    run: { command: serverPath, args: tempArgs, options: executableOptions },
+    debug: { command: serverPath, args: tempArgs, options: executableOptions },
   };
 
   const documentSelector: LanguageClientOptions["documentSelector"] = folder
@@ -234,6 +239,18 @@ export async function startClientForFolder(
       fileEvents: workspace.createFileSystemWatcher(fileWatcherPattern),
     },
     workspaceFolder: folder,
+    middleware: {
+      // vale-ls's own `fix`-RPC-based quick fixes for `replace` alerts are
+      // superseded by ValeSubstitutionCodeActionProvider (registered
+      // separately in codeActions.ts), which reads every swap alternative
+      // straight from the alert data instead of that RPC - so strip the
+      // server's copies here rather than showing both. See
+      // https://github.com/ChrisChinchilla/vale-vscode/issues/7.
+      provideCodeActions: async (document, range, context, token, next) => {
+        const results = await next(document, range, context, token);
+        return results?.filter((item) => !isServerReplaceFix(item));
+      },
+    },
   };
 
   const clientId = folder ? `vale-${folder.uri.toString()}` : "vale";
@@ -261,15 +278,15 @@ export async function startClientForFolder(
  * there are none).
  */
 export async function startClientsForCurrentWorkspace(
-  escapedPath: string
+  serverPath: string
 ): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
   if (folders && folders.length > 0) {
     for (const folder of folders) {
-      await startClientForFolder(escapedPath, folder);
+      await startClientForFolder(serverPath, folder);
     }
   } else {
-    await startClientForFolder(escapedPath, undefined);
+    await startClientForFolder(serverPath, undefined);
   }
 }
 
@@ -280,7 +297,7 @@ export async function startClientsForCurrentWorkspace(
  */
 export function registerWorkspaceFolderWatcher(
   context: ExtensionContext,
-  escapedPath: string
+  serverPath: string
 ): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(async (event) => {
@@ -293,7 +310,7 @@ export function registerWorkspaceFolderWatcher(
         await stopAndRemoveClient(noFolderClientKey());
       }
       for (const folder of event.added) {
-        await startClientForFolder(escapedPath, folder);
+        await startClientForFolder(serverPath, folder);
       }
     })
   );
