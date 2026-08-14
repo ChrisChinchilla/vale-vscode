@@ -81,6 +81,8 @@ The extension starts a separate Vale Language Server instance per workspace fold
 - Commands run from the **Vale** panel or command palette (**Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary commands) act on the workspace folder containing the currently active file, not always the first folder in the workspace.
 - Adding or removing a folder from the workspace starts or stops its Vale Language Server instance automatically, without needing to reload the window.
 
+Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck`, `vale.valeCLI.minAlertLevel`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, `vale.valeCLI.installVale`) restarts the affected folder's server instance automatically, without needing to reload the window.
+
 ## Settings
 
 The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale_).

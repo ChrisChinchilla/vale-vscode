@@ -4,6 +4,7 @@ import { createValeOutputChannel } from "./ui";
 import {
   ensureLanguageServerBinary,
   hasActiveClients,
+  registerConfigurationWatcher,
   registerWorkspaceFolderWatcher,
   startClientsForCurrentWorkspace,
   stopAllClients,
@@ -29,6 +30,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   console.log("Starting language server(s)");
   await startClientsForCurrentWorkspace(serverPath);
   registerWorkspaceFolderWatcher(context, serverPath);
+  registerConfigurationWatcher(context, serverPath);
 
   registerCommands(context);
   registerCodeActions(context);
