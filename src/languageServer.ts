@@ -21,7 +21,7 @@ import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { isServerReplaceFix } from "./codeActions";
 import {
   ensureDockerWrapperScript,
-  getWindowsDockerProxyPath,
+  getWindowsDockerProxy,
 } from "./docker";
 
 import {
@@ -218,13 +218,14 @@ export async function startClientForFolder(
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
 
+  const windowsProxy =
+    process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
   const execution = resolveValeExecutionOptions(
     configuration,
     workspaceRoot,
     process.platform,
-    process.platform === "win32"
-      ? getWindowsDockerProxyPath(context)
-      : undefined
+    windowsProxy?.path,
+    windowsProxy?.unavailableReason
   );
   // Leave this unset when no custom path is configured so vale-ls can still
   // honor installVale and manage its own Vale binary.

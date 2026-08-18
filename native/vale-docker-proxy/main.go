@@ -35,14 +35,18 @@ func main() {
 
 	mappings := []pathMapping{{host: filepath.Clean(cfg.Root), container: containerWorkspace}}
 	valeArgs := make([]string, 0, len(os.Args)-1)
-	dockerArgs := []string{"run", "--rm", "-i", "--mount", bindMount(cfg.Root, containerWorkspace), "-w", containerWorkspace}
+	dockerArgs := []string{"run", "--rm", "-i", "--mount", bindMount(cfg.Root, containerWorkspace, false), "-w", containerWorkspace}
 	dockerArgs = append(dockerArgs, cfg.ExtraArgs...)
 
 	for _, arg := range os.Args[1:] {
 		translated, mapping := translateArgument(arg, mappings, len(mappings))
 		if mapping != nil {
 			mappings = append(mappings, *mapping)
-			dockerArgs = append(dockerArgs, "--mount", bindMount(mapping.host, mapping.container))
+			// Paths outside the workspace root (an external --config file's
+			// directory, a temp file, etc.) are mounted read-only: Vale only
+			// ever needs to read them, and this caps what a compromised
+			// container image could tamper with to the workspace mount alone.
+			dockerArgs = append(dockerArgs, "--mount", bindMount(mapping.host, mapping.container, true))
 		}
 		valeArgs = append(valeArgs, translated)
 	}
@@ -100,8 +104,12 @@ func replaceWindowsPrefix(value, hostRoot, containerRoot string) (string, bool) 
 	return containerRoot + "/" + filepath.ToSlash(relative), true
 }
 
-func bindMount(host, container string) string {
-	return fmt.Sprintf("type=bind,source=%s,target=%s", host, container)
+func bindMount(host, container string, readonly bool) string {
+	mount := fmt.Sprintf("type=bind,source=%s,target=%s", host, container)
+	if readonly {
+		mount += ",readonly"
+	}
+	return mount
 }
 
 func translateJSONOutput(output []byte, mappings []pathMapping) []byte {

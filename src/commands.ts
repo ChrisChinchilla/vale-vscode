@@ -8,20 +8,21 @@ import { runValeCommand } from "./cli";
 import { getValeOutputChannel, registerValeCommandsTreeView } from "./ui";
 import { resolveValeExecutionOptions } from "./config";
 import type { ValeExecutionOptions } from "./utils";
-import { getWindowsDockerProxyPath } from "./docker";
+import { getWindowsDockerProxy } from "./docker";
 
 function resolveCommandExecution(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
   context: ExtensionContext
 ): ValeExecutionOptions {
+  const windowsProxy =
+    process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
   const execution = resolveValeExecutionOptions(
     configuration,
     workspaceRoot,
     process.platform,
-    process.platform === "win32"
-      ? getWindowsDockerProxyPath(context)
-      : undefined
+    windowsProxy?.path,
+    windowsProxy?.unavailableReason
   );
   if (execution.dockerUnavailableReason) {
     vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);

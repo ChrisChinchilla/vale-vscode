@@ -5,28 +5,46 @@ import { mkdir } from "node:fs/promises";
 import fs from "fs";
 import * as path from "path";
 
-import { buildDockerWrapperScript, sha256Hex } from "./utils";
+import { buildDockerWrapperScript, resolveWindowsDockerProxyArch, sha256Hex } from "./utils";
 import { getInstallDir } from "./languageServer";
 
-export function getWindowsDockerProxyPath(
+export interface WindowsDockerProxy {
+  path?: string;
+  /** Set (and `path` unset) whenever the proxy can't be used, so callers can surface a specific reason instead of a generic one. */
+  unavailableReason?: string;
+}
+
+/**
+ * Locates the native Windows Docker proxy binary for the running
+ * architecture, distinguishing "this architecture has no proxy build" from
+ * "the proxy should exist but wasn't found in this install" - the two have
+ * different fixes (neither is available, vs. reinstalling/reporting a bug).
+ */
+export function getWindowsDockerProxy(
   context: ExtensionContext
-): string | undefined {
-  const architecture = process.arch === "x64"
-    ? "x64"
-    : process.arch === "arm64"
-      ? "arm64"
-      : undefined;
+): WindowsDockerProxy {
+  const architecture = resolveWindowsDockerProxyArch(process.arch);
   if (!architecture) {
-    return undefined;
+    return {
+      unavailableReason: `Docker mode requires the Windows Docker proxy, which isn't built for this architecture (${process.arch}). Using the configured local Vale binary instead.`,
+    };
   }
+
   const proxyPath = path.join(
-        context.extensionPath,
-        "native",
-        "vale-docker-proxy",
-        "bin",
-        `vale-docker-proxy-windows-${architecture}.exe`
-      );
-  return fs.existsSync(proxyPath) ? proxyPath : undefined;
+    context.extensionPath,
+    "native",
+    "vale-docker-proxy",
+    "bin",
+    `vale-docker-proxy-windows-${architecture}.exe`
+  );
+  if (!fs.existsSync(proxyPath)) {
+    return {
+      unavailableReason:
+        "Docker mode requires the Windows Docker proxy, but its executable wasn't found in this install. Using the configured local Vale binary instead.",
+    };
+  }
+
+  return { path: proxyPath };
 }
 
 /**

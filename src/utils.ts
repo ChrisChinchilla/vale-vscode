@@ -136,6 +136,11 @@ export function shellQuoteSingle(value: string): string {
  * sets `ENTRYPOINT ["/bin/vale"]`, so `valeArgs` are the container's actual
  * argv - adding a literal `"vale"` would make Vale see it as an unwanted
  * extra positional argument and misparse every subcommand.
+ *
+ * Includes `-i` (keep stdin open) for parity with the Windows proxy
+ * (`native/vale-docker-proxy`), which forwards stdin explicitly - without
+ * it, the container's stdin is closed immediately regardless of what the
+ * host process has open, silently dropping anything vale-ls pipes in.
  */
 export function buildDockerRunArgs(
   image: string,
@@ -146,6 +151,7 @@ export function buildDockerRunArgs(
   return [
     "run",
     "--rm",
+    "-i",
     "-v",
     `${workspaceRoot}:${workspaceRoot}`,
     "-w",
@@ -154,6 +160,22 @@ export function buildDockerRunArgs(
     image,
     ...valeArgs,
   ];
+}
+
+/**
+ * Maps `process.arch` to the architecture suffix `vale-docker-proxy`'s
+ * shipped binaries use (`native/vale-docker-proxy/bin/
+ * vale-docker-proxy-windows-<arch>.exe`), or `null` when this extension
+ * doesn't build a proxy for that architecture. Distinct from `detectArch`,
+ * which uses Rust-target-triple-style names (`x86_64`/`aarch64`) for the
+ * unrelated vale-ls download asset names.
+ */
+export function resolveWindowsDockerProxyArch(
+  processArch: string
+): "x64" | "arm64" | null {
+  if (processArch === "x64") return "x64";
+  if (processArch === "arm64") return "arm64";
+  return null;
 }
 
 export interface DockerOptions {
@@ -176,7 +198,8 @@ export function resolveValeExecutionSettings(
   platform: string,
   dockerImage: string | undefined,
   dockerExtraArgs: string[] | undefined,
-  windowsProxyPath?: string
+  windowsProxyPath?: string,
+  windowsProxyUnavailableReason?: string
 ): ValeExecutionOptions {
   const localBinaryPath = binaryPath || "vale";
   if (!dockerEnabled) {
@@ -195,7 +218,8 @@ export function resolveValeExecutionSettings(
     return {
       binaryPath: localBinaryPath,
       dockerUnavailableReason:
-        "Docker mode requires the Windows Docker proxy, but no proxy is available for this architecture. Using the configured local Vale binary instead.",
+        windowsProxyUnavailableReason ??
+        "Docker mode requires the Windows Docker proxy, which isn't available. Using the configured local Vale binary instead.",
     };
   }
 
@@ -234,6 +258,7 @@ export function buildDockerProxyEnvironment(
  * not prefixed by the word "vale"), and the default `jdkato/vale` image
  * already sets `ENTRYPOINT ["/bin/vale"]` - so, like `buildDockerRunArgs`,
  * this doesn't add a literal `"vale"` before the forwarded arguments.
+ * Also includes `-i` for the same stdin-parity reason as `buildDockerRunArgs`.
  */
 export function buildDockerWrapperScript(
   image: string,
@@ -243,6 +268,7 @@ export function buildDockerWrapperScript(
   const dockerArgs = [
     "run",
     "--rm",
+    "-i",
     "-v",
     shellQuoteSingle(`${workspaceRoot}:${workspaceRoot}`),
     "-w",

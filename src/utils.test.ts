@@ -15,6 +15,7 @@ import {
   getExpectedChecksum,
   resolveConfigPath,
   resolveValeExecutionSettings,
+  resolveWindowsDockerProxyArch,
   sha256Hex,
   shellQuoteSingle,
   verifyChecksum,
@@ -226,6 +227,7 @@ describe("buildDockerRunArgs", () => {
     assert.deepEqual(args, [
       "run",
       "--rm",
+      "-i",
       "-v",
       "/workspace/root:/workspace/root",
       "-w",
@@ -245,6 +247,7 @@ describe("buildDockerRunArgs", () => {
     assert.deepEqual(args, [
       "run",
       "--rm",
+      "-i",
       "-v",
       "/workspace/root:/workspace/root",
       "-w",
@@ -254,6 +257,23 @@ describe("buildDockerRunArgs", () => {
       "jdkato/vale",
       "sync",
     ]);
+  });
+
+  test("keeps stdin open (-i) for parity with the Windows proxy", () => {
+    const args = buildDockerRunArgs("jdkato/vale", "/workspace/root", ["ls-config"]);
+    assert.ok(args.includes("-i"));
+  });
+});
+
+describe("resolveWindowsDockerProxyArch", () => {
+  test("maps x64 and arm64 to their proxy binary suffixes", () => {
+    assert.equal(resolveWindowsDockerProxyArch("x64"), "x64");
+    assert.equal(resolveWindowsDockerProxyArch("arm64"), "arm64");
+  });
+
+  test("returns null for architectures with no shipped proxy", () => {
+    assert.equal(resolveWindowsDockerProxyArch("ia32"), null);
+    assert.equal(resolveWindowsDockerProxyArch("arm"), null);
   });
 });
 
@@ -303,7 +323,7 @@ describe("resolveValeExecutionSettings", () => {
     assert.match(result.dockerUnavailableReason ?? "", /workspace folder/);
   });
 
-  test("falls back to the configured binary on Windows", () => {
+  test("falls back to the configured binary on Windows with a generic reason when none is given", () => {
     const result = resolveValeExecutionSettings(
       "C:\\Vale\\vale.exe",
       true,
@@ -314,7 +334,21 @@ describe("resolveValeExecutionSettings", () => {
     );
     assert.equal(result.binaryPath, "C:\\Vale\\vale.exe");
     assert.equal(result.docker, undefined);
-    assert.match(result.dockerUnavailableReason ?? "", /no proxy is available/);
+    assert.match(result.dockerUnavailableReason ?? "", /isn't available/);
+  });
+
+  test("surfaces the caller-supplied reason the Windows proxy is unavailable", () => {
+    const result = resolveValeExecutionSettings(
+      "C:\\Vale\\vale.exe",
+      true,
+      "C:\\workspace",
+      "win32",
+      undefined,
+      undefined,
+      undefined,
+      "Docker mode requires the Windows Docker proxy, which isn't built for this architecture (ia32). Using the configured local Vale binary instead."
+    );
+    assert.match(result.dockerUnavailableReason ?? "", /isn't built for this architecture \(ia32\)/);
   });
 
   test("enables Docker through the native proxy on Windows", () => {
@@ -342,7 +376,7 @@ describe("buildDockerWrapperScript", () => {
       "/workspace/root"
     );
     assert.ok(script.startsWith("#!/usr/bin/env bash\n"));
-    assert.ok(script.includes("exec docker run --rm"));
+    assert.ok(script.includes("exec docker run --rm -i"));
     assert.ok(script.includes(`'/workspace/root:/workspace/root'`));
     assert.ok(script.includes(`'jdkato/vale'`));
     assert.ok(script.trim().endsWith(`"$@"`));

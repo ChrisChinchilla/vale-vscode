@@ -32,3 +32,16 @@ func TestTranslateJSONPaths(t *testing.T) {
 		t.Fatalf("translated key missing: %s", output)
 	}
 }
+
+func TestBindMountReadonly(t *testing.T) {
+	// The workspace root is mounted read-write (Vale/sync may need to write
+	// into it), but anything mounted for a path outside the workspace (an
+	// external --config file's directory, a temp file, ...) is read-only,
+	// since Vale only ever needs to read those.
+	if got := bindMount(`C:\workspace`, containerWorkspace, false); got != `type=bind,source=C:\workspace,target=/workspace` {
+		t.Fatalf("workspace mount should be writable: got %q", got)
+	}
+	if got := bindMount(`C:\config`, "/vale-host/1", true); got != `type=bind,source=C:\config,target=/vale-host/1,readonly` {
+		t.Fatalf("external mount should be read-only: got %q", got)
+	}
+}

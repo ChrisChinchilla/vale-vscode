@@ -51,3 +51,22 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: "0"
         run: go build -trimpath -ldflags "-s -w -buildid=" -o proxy-arm64.exe .
+      - name: Verify committed binaries match this build
+        shell: pwsh
+        run: |
+          $mismatch = $false
+          foreach ($pair in @(
+            @{ Built = "proxy-x64.exe"; Committed = "bin/vale-docker-proxy-windows-x64.exe" },
+            @{ Built = "proxy-arm64.exe"; Committed = "bin/vale-docker-proxy-windows-arm64.exe" }
+          )) {
+            $built = (Get-FileHash $pair.Built -Algorithm SHA256).Hash
+            $committed = (Get-FileHash $pair.Committed -Algorithm SHA256).Hash
+            if ($built -ne $committed) {
+              Write-Error "$($pair.Committed) does not match a fresh build from this source (built $built, committed $committed). Rebuild it from native/vale-docker-proxy per README.md and commit the result."
+              $mismatch = $true
+            }
+          }
+          if ($mismatch) {
+            exit 1
+          }
+          Write-Host "Committed proxy binaries match a fresh build from source."

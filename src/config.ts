@@ -29,7 +29,8 @@ export function resolveValeExecutionOptions(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
   platform = process.platform,
-  windowsProxyPath?: string
+  windowsProxyPath?: string,
+  windowsProxyUnavailableReason?: string
 ): ValeExecutionOptions {
   return resolveValeExecutionSettings(
     configuration.get<string>("vale.valeCLI.path") || undefined,
@@ -38,7 +39,8 @@ export function resolveValeExecutionOptions(
     platform,
     configuration.get<string>("vale.docker.image") || undefined,
     configuration.get<string[]>("vale.docker.extraArgs"),
-    windowsProxyPath
+    windowsProxyPath,
+    windowsProxyUnavailableReason
   );
 }
 
