@@ -85,7 +85,7 @@ Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck
 
 ### Using Vale via Docker
 
-Set `vale.docker.enabled` to run `vale` inside a Docker container instead of a local install - useful if you'd rather not install Vale (or its packages/styles) on your machine at all. Requires `docker` on your `$PATH` and a workspace folder on the local filesystem (Docker mode is ignored in single-file/no-folder windows).
+Set `vale.docker.enabled` to run `vale` inside a Docker container instead of a local install - useful if you'd rather not install Vale (or its packages/styles) on your machine at all. Requires `docker` on your `$PATH` (Docker Desktop on Windows) and a workspace folder on the local filesystem. Docker mode is ignored in single-file/no-folder windows.
 
 The extension generates a small wrapper script per workspace folder that mounts the folder onto the identical path inside the container and runs `docker run --rm -v <folder>:<folder> -w <folder> <image> ...` (the default `jdkato/vale` image sets `vale` as its entrypoint, so its arguments go straight after the image name). This applies both to the language server's own linting and to the **Vale: Sync**/**Vale: Show Configuration**/**Vale: Show Readability Metrics** commands and vocabulary lookups. While Docker mode is enabled, `vale.valeCLI.installVale` and `vale.valeCLI.path` are ignored. If you use a custom image with a different entrypoint, add `--entrypoint=vale` (or whatever your image needs) to `vale.docker.extraArgs`.
 
@@ -93,7 +93,7 @@ The extension generates a small wrapper script per workspace folder that mounts 
 - `vale.docker.extraArgs`: extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace.
 
 > [!NOTE]
-> Windows support is best-effort. The language server invokes the wrapper script directly rather than through a shell, and Windows may not run the generated `.cmd` file that way. The direct commands (Sync/Show Configuration/Show Readability Metrics) work regardless, since the extension spawns `docker` itself.
+> On Windows, the extension ships native x64 and ARM64 proxy executables because vale-ls cannot invoke a batch-file wrapper. The proxy mounts the Windows workspace at `/workspace` in the Linux container, translates command arguments and JSON output paths in both directions, and invokes `docker.exe` without a shell. Unsupported Windows architectures fall back to `vale.valeCLI.path`, or `vale` on `PATH`, with a warning.
 
 ## Settings
 

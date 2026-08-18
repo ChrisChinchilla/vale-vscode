@@ -1,8 +1,12 @@
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 
-import { buildDockerRunArgs, buildValeSpawnOptions } from "./utils";
+import {
+  buildDockerProxyEnvironment,
+  buildDockerRunArgs,
+  buildValeSpawnOptions,
+} from "./utils";
+import type { ValeExecutionOptions } from "./utils";
 import { getValeOutputChannel } from "./ui";
-import { dockerOptions } from "./config";
 
 /**
  * Direct invocations of the `vale` CLI (as opposed to the language server).
@@ -11,17 +15,28 @@ import { dockerOptions } from "./config";
 function spawnVale(
   args: string[],
   workingDir: string,
-  docker: dockerOptions | undefined
+  execution: ValeExecutionOptions
 ): ChildProcessWithoutNullStreams {
   const options = buildValeSpawnOptions(workingDir);
-  if (docker) {
+  if (execution.docker) {
+    if (execution.docker.proxyPath) {
+      return spawn(execution.docker.proxyPath, args, {
+        ...options,
+        env: buildDockerProxyEnvironment(execution.docker, workingDir),
+      });
+    }
     return spawn(
       "docker",
-      buildDockerRunArgs(docker.image, workingDir, args, docker.extraArgs),
+      buildDockerRunArgs(
+        execution.docker.image,
+        workingDir,
+        args,
+        execution.docker.extraArgs
+      ),
       options
     );
   }
-  return spawn("vale", args, options);
+  return spawn(execution.binaryPath, args, options);
 }
 
 /**
@@ -30,11 +45,11 @@ function spawnVale(
 export async function runValeCommand(
   args: string[],
   workingDir: string,
-  docker?: dockerOptions
+  execution: ValeExecutionOptions
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const valeOutputChannel = getValeOutputChannel();
-    const valeProcess = spawnVale(args, workingDir, docker);
+    const valeProcess = spawnVale(args, workingDir, execution);
 
     valeProcess.stdout.on("data", (data) => {
       valeOutputChannel.append(data.toString());
@@ -61,10 +76,10 @@ export async function runValeCommand(
  */
 export async function getStylesPathsFromVale(
   workspaceRoot: string,
-  docker?: dockerOptions
+  execution: ValeExecutionOptions
 ): Promise<string | null> {
   return new Promise((resolve) => {
-    const valeProcess = spawnVale(["ls-config"], workspaceRoot, docker);
+    const valeProcess = spawnVale(["ls-config"], workspaceRoot, execution);
 
     let stdout = "";
     let stderr = "";

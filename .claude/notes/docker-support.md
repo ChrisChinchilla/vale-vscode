@@ -76,18 +76,23 @@ already had to fix once for settings resolution.
 
 `src/docker.ts`'s `ensureDockerWrapperScript` names the script
 `vale-docker-wrapper-<sha256Hex(folder.uri.toString()).slice(0, 16)>`
-(`.cmd` on Windows), stored alongside the vale-ls binary in
-`getInstallDir(context)` (`src/languageServer.ts`).
+on macOS and Linux, stored alongside the vale-ls binary in
+`getInstallDir(context)` (`src/languageServer.ts`). Windows uses the native
+proxy below and isolates per-folder configuration through each vale-ls
+process's environment instead of per-folder executables.
 
-## Known limitation: Windows
+## Windows proxy
 
-vale-ls spawns `valeBinaryPath` directly, without a shell. Windows can't
-execute a `.cmd`/`.bat` file that way (`CreateProcess` needs `cmd.exe /C`
-to run batch files; Go's `os/exec` doesn't add that automatically). Docker
-mode still generates a `.cmd` wrapper on Windows and is documented as
-best-effort/experimental there, rather than blocked outright - it may or
-may not work depending on how vale-ls's own process-spawning is
-implemented. The direct CLI commands (**Vale: Sync**, **Vale: Show
-Configuration**, **Vale: Show Readability Metrics**) are unaffected by this
-caveat: `src/cli.ts` spawns `docker` itself directly with a normal argv
-array, no wrapper script involved.
+vale-ls spawns `valeBinaryPath` directly, without a shell, so Windows can't
+use the POSIX wrapper or a `.cmd`/`.bat` equivalent. The extension instead
+ships native x64 and ARM64 `vale-docker-proxy.exe` binaries built from
+`native/vale-docker-proxy`. Each per-folder vale-ls process receives its
+image, root, and extra arguments through `VALE_DOCKER_PROXY_CONFIG`; direct
+commands launch the same proxy with the same environment.
+
+The default image is Linux-based, so the proxy mounts the Windows workspace
+at `/workspace`. It translates Windows paths in Vale arguments to container
+paths, mounts absolute arguments outside the workspace separately (including
+vale-ls temporary files), and recursively translates paths in JSON output
+back to their Windows form. The proxy uses `os/exec` directly and never
+passes settings or filenames through a command shell.

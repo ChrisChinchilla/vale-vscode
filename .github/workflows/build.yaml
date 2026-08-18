@@ -28,3 +28,26 @@ jobs:
         run: npm run webpack
       - name: Package extension
         run: npm run package
+
+  windows-docker-proxy:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: native/vale-docker-proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/vale-docker-proxy/go.mod
+      - name: Test proxy
+        run: go test ./...
+      - name: Build x64 proxy
+        env:
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-s -w -buildid=" -o proxy-x64.exe .
+      - name: Build ARM64 proxy
+        env:
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-s -w -buildid=" -o proxy-arm64.exe .

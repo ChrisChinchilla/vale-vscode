@@ -156,6 +156,75 @@ export function buildDockerRunArgs(
   ];
 }
 
+export interface DockerOptions {
+  image: string;
+  extraArgs: string[];
+  proxyPath?: string;
+}
+
+export interface ValeExecutionOptions {
+  binaryPath: string;
+  docker?: DockerOptions;
+  dockerUnavailableReason?: string;
+}
+
+/** Resolves the executable used by both vale-ls and direct Vale commands. */
+export function resolveValeExecutionSettings(
+  binaryPath: string | undefined,
+  dockerEnabled: boolean,
+  workspaceRoot: string | undefined,
+  platform: string,
+  dockerImage: string | undefined,
+  dockerExtraArgs: string[] | undefined,
+  windowsProxyPath?: string
+): ValeExecutionOptions {
+  const localBinaryPath = binaryPath || "vale";
+  if (!dockerEnabled) {
+    return { binaryPath: localBinaryPath };
+  }
+
+  if (!workspaceRoot) {
+    return {
+      binaryPath: localBinaryPath,
+      dockerUnavailableReason:
+        "Docker mode requires a workspace folder and has been ignored for this window.",
+    };
+  }
+
+  if (platform === "win32" && !windowsProxyPath) {
+    return {
+      binaryPath: localBinaryPath,
+      dockerUnavailableReason:
+        "Docker mode requires the Windows Docker proxy, but no proxy is available for this architecture. Using the configured local Vale binary instead.",
+    };
+  }
+
+  return {
+    binaryPath: localBinaryPath,
+    docker: {
+      image: dockerImage || "jdkato/vale",
+      extraArgs: dockerExtraArgs ?? [],
+      ...(platform === "win32" && windowsProxyPath
+        ? { proxyPath: windowsProxyPath }
+        : {}),
+    },
+  };
+}
+
+export function buildDockerProxyEnvironment(
+  docker: DockerOptions,
+  workspaceRoot: string
+): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    VALE_DOCKER_PROXY_CONFIG: JSON.stringify({
+      image: docker.image,
+      root: workspaceRoot,
+      extraArgs: docker.extraArgs,
+    }),
+  };
+}
+
 /**
  * Generates the content of the wrapper script vale-ls's `valeBinaryPath`
  * points at when Docker mode is enabled. vale-ls spawns `valeBinaryPath`
@@ -167,25 +236,10 @@ export function buildDockerRunArgs(
  * this doesn't add a literal `"vale"` before the forwarded arguments.
  */
 export function buildDockerWrapperScript(
-  platform: string,
   image: string,
   workspaceRoot: string,
   extraArgs: string[] = []
 ): string {
-  if (platform === "win32") {
-    const dockerArgs = [
-      "run",
-      "--rm",
-      "-v",
-      `"${workspaceRoot}:${workspaceRoot}"`,
-      "-w",
-      `"${workspaceRoot}"`,
-      ...extraArgs,
-      image,
-    ].join(" ");
-    return `@echo off\r\ndocker ${dockerArgs} %*\r\n`;
-  }
-
   const dockerArgs = [
     "run",
     "--rm",

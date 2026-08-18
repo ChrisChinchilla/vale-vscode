@@ -1,6 +1,13 @@
 import * as vscode from "vscode";
 
-import { buildValeFilterExpression, resolveConfigPath } from "./utils";
+import {
+  buildValeFilterExpression,
+  resolveConfigPath,
+  resolveValeExecutionSettings,
+} from "./utils";
+import type { ValeExecutionOptions } from "./utils";
+
+export type { ValeExecutionOptions } from "./utils";
 
 export type valeConfigOptions =
   | "configPath"
@@ -13,29 +20,26 @@ export interface valeArgs {
   value: string;
 }
 
-export interface dockerOptions {
-  image: string;
-  extraArgs: string[];
-}
-
 /**
- * Resolves `vale.docker.*` settings into the image/extraArgs Docker mode
- * needs, or `undefined` when Docker mode is off. Shared by every direct
- * `vale` CLI call site (`cli.ts`, via `commands.ts`/`vocabulary.ts`) so
- * they don't each duplicate the same setting reads.
+ * Resolves the shared execution mode used by vale-ls and every direct Vale
+ * command. Unsupported Docker contexts retain the configured local fallback
+ * and include a reason callers can surface to the user.
  */
-export function resolveDockerOptions(
-  configuration: vscode.WorkspaceConfiguration
-): dockerOptions | undefined {
-  const enabled = configuration.get<boolean>("vale.docker.enabled") ?? false;
-  if (!enabled) {
-    return undefined;
-  }
-
-  return {
-    image: configuration.get<string>("vale.docker.image") || "jdkato/vale",
-    extraArgs: configuration.get<string[]>("vale.docker.extraArgs") ?? [],
-  };
+export function resolveValeExecutionOptions(
+  configuration: vscode.WorkspaceConfiguration,
+  workspaceRoot: string | undefined,
+  platform = process.platform,
+  windowsProxyPath?: string
+): ValeExecutionOptions {
+  return resolveValeExecutionSettings(
+    configuration.get<string>("vale.valeCLI.path") || undefined,
+    configuration.get<boolean>("vale.docker.enabled") ?? false,
+    workspaceRoot,
+    platform,
+    configuration.get<string>("vale.docker.image") || undefined,
+    configuration.get<string[]>("vale.docker.extraArgs"),
+    windowsProxyPath
+  );
 }
 
 /**

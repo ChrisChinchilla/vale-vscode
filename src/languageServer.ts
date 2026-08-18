@@ -14,11 +14,15 @@ import {
   getExecutableName,
   getExpectedChecksum,
   sha256Hex,
+  buildDockerProxyEnvironment,
 } from "./utils";
-import { buildValeConfig, resolveDockerOptions } from "./config";
+import { buildValeConfig, resolveValeExecutionOptions } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { isServerReplaceFix } from "./codeActions";
-import { ensureDockerWrapperScript } from "./docker";
+import {
+  ensureDockerWrapperScript,
+  getWindowsDockerProxyPath,
+} from "./docker";
 
 import {
   LanguageClient,
@@ -214,31 +218,38 @@ export async function startClientForFolder(
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
 
-  const docker = resolveDockerOptions(configuration);
-  let valeBinaryPath = configuration.get<string>("vale.valeCLI.path") || undefined;
-  let dockerModeActive = false;
-  if (docker) {
-    if (workspaceRoot && folder) {
-      valeBinaryPath = await ensureDockerWrapperScript(
-        context,
-        folder,
-        docker.image,
-        workspaceRoot,
-        docker.extraArgs
-      );
-      dockerModeActive = true;
-    } else {
-      vscode.window.showWarningMessage(
-        "Vale: Docker mode requires a workspace folder and has been ignored for this window."
-      );
-    }
+  const execution = resolveValeExecutionOptions(
+    configuration,
+    workspaceRoot,
+    process.platform,
+    process.platform === "win32"
+      ? getWindowsDockerProxyPath(context)
+      : undefined
+  );
+  // Leave this unset when no custom path is configured so vale-ls can still
+  // honor installVale and manage its own Vale binary.
+  let valeBinaryPath =
+    configuration.get<string>("vale.valeCLI.path") || undefined;
+  if (execution.dockerUnavailableReason) {
+    vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
+  }
+  if (execution.docker?.proxyPath) {
+    valeBinaryPath = execution.docker.proxyPath;
+  } else if (execution.docker && workspaceRoot && folder) {
+    valeBinaryPath = await ensureDockerWrapperScript(
+      context,
+      folder,
+      execution.docker.image,
+      workspaceRoot,
+      execution.docker.extraArgs
+    );
   }
 
   const valeConfig = buildValeConfig(
     configuration,
     workspaceRoot,
     valeBinaryPath,
-    dockerModeActive
+    Boolean(execution.docker)
   );
 
   const tempArgs: never[] = [];
@@ -246,7 +257,14 @@ export async function startClientForFolder(
   // relative to its own working directory. Without an explicit `cwd` here,
   // Node defaults the child process to the extension host's cwd rather than
   // the workspace folder, so those sections silently never match. See #73.
-  const executableOptions = workspaceRoot ? { cwd: workspaceRoot } : undefined;
+  const executableOptions = workspaceRoot
+    ? {
+        cwd: workspaceRoot,
+        env: execution.docker?.proxyPath
+          ? buildDockerProxyEnvironment(execution.docker, workspaceRoot)
+          : process.env,
+      }
+    : undefined;
   const serverOptions: ServerOptions = {
     run: { command: serverPath, args: tempArgs, options: executableOptions },
     debug: { command: serverPath, args: tempArgs, options: executableOptions },
