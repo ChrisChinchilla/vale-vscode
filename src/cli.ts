@@ -1,22 +1,40 @@
-import { spawn } from "node:child_process";
+import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 
-import { buildValeSpawnOptions } from "./utils";
+import { buildDockerRunArgs, buildValeSpawnOptions } from "./utils";
 import { getValeOutputChannel } from "./ui";
+import { dockerOptions } from "./config";
 
 /**
  * Direct invocations of the `vale` CLI (as opposed to the language server).
  */
+
+function spawnVale(
+  args: string[],
+  workingDir: string,
+  docker: dockerOptions | undefined
+): ChildProcessWithoutNullStreams {
+  const options = buildValeSpawnOptions(workingDir);
+  if (docker) {
+    return spawn(
+      "docker",
+      buildDockerRunArgs(docker.image, workingDir, args, docker.extraArgs),
+      options
+    );
+  }
+  return spawn("vale", args, options);
+}
 
 /**
  * Runs a Vale CLI command and streams the output to the Vale output channel.
  */
 export async function runValeCommand(
   args: string[],
-  workingDir: string
+  workingDir: string,
+  docker?: dockerOptions
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const valeOutputChannel = getValeOutputChannel();
-    const valeProcess = spawn("vale", args, buildValeSpawnOptions(workingDir));
+    const valeProcess = spawnVale(args, workingDir, docker);
 
     valeProcess.stdout.on("data", (data) => {
       valeOutputChannel.append(data.toString());
@@ -42,14 +60,11 @@ export async function runValeCommand(
  * Gets all styles paths from Vale's configuration using `vale ls-config`
  */
 export async function getStylesPathsFromVale(
-  workspaceRoot: string
+  workspaceRoot: string,
+  docker?: dockerOptions
 ): Promise<string | null> {
   return new Promise((resolve) => {
-    const valeProcess = spawn(
-      "vale",
-      ["ls-config"],
-      buildValeSpawnOptions(workspaceRoot)
-    );
+    const valeProcess = spawnVale(["ls-config"], workspaceRoot, docker);
 
     let stdout = "";
     let stderr = "";

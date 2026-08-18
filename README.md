@@ -81,7 +81,19 @@ The extension starts a separate Vale Language Server instance per workspace fold
 - Commands run from the **Vale** panel or command palette (**Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary commands) act on the workspace folder containing the currently active file, not always the first folder in the workspace.
 - Adding or removing a folder from the workspace starts or stops its Vale Language Server instance automatically, without needing to reload the window.
 
-Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck`, `vale.valeCLI.minAlertLevel`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, `vale.valeCLI.installVale`) restarts the affected folder's server instance automatically, without needing to reload the window.
+Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck`, `vale.valeCLI.minAlertLevel`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, `vale.valeCLI.installVale`, `vale.valeCLI.path`, `vale.docker.enabled`, `vale.docker.image`, `vale.docker.extraArgs`) restarts the affected folder's server instance automatically, without needing to reload the window.
+
+### Using Vale via Docker
+
+Set `vale.docker.enabled` to run `vale` inside a Docker container instead of a local install - useful if you'd rather not install Vale (or its packages/styles) on your machine at all. Requires `docker` on your `$PATH` and a workspace folder on the local filesystem (Docker mode is ignored in single-file/no-folder windows).
+
+The extension generates a small wrapper script per workspace folder that mounts the folder onto the identical path inside the container and runs `docker run --rm -v <folder>:<folder> -w <folder> <image> ...` (the default `jdkato/vale` image sets `vale` as its entrypoint, so its arguments go straight after the image name). This applies both to the language server's own linting and to the **Vale: Sync**/**Vale: Show Configuration**/**Vale: Show Readability Metrics** commands and vocabulary lookups. While Docker mode is enabled, `vale.valeCLI.installVale` and `vale.valeCLI.path` are ignored. If you use a custom image with a different entrypoint, add `--entrypoint=vale` (or whatever your image needs) to `vale.docker.extraArgs`.
+
+- `vale.docker.image` (default: `jdkato/vale`): the image to run.
+- `vale.docker.extraArgs`: extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace.
+
+> [!NOTE]
+> Windows support is best-effort. The language server invokes the wrapper script directly rather than through a shell, and Windows may not run the generated `.cmd` file that way. The direct commands (Sync/Show Configuration/Show Readability Metrics) work regardless, since the extension spawns `docker` itself.
 
 ## Settings
 
@@ -94,7 +106,10 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.enableSpellcheck` (default: `false`): Enable in-built spell checking for any `Spelling` styles.
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
-- `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages.
+- `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages. Ignored when `vale.docker.enabled` is true.
+- `vale.docker.enabled` (default: `false`): Run Vale inside a Docker container instead of a local install. See [Using Vale via Docker](#using-vale-via-docker) above.
+- `vale.docker.image` (default: `jdkato/vale`): Docker image to run Vale from.
+- `vale.docker.extraArgs` (default: `[]`): Extra arguments spliced into `docker run` before the image name.
 - `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved.
 - `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled.
 - `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on).

@@ -118,7 +118,28 @@
           "scope": "resource",
           "type": "string",
           "default": null,
-          "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`."
+          "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
+        },
+        "vale.docker.enabled": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Run Vale inside a Docker container instead of a local install. Overrides `#vale.valeCLI.installVale#` and `#vale.valeCLI.path#`. Requires the workspace folder to be on the local filesystem, and `docker` to be available."
+        },
+        "vale.docker.image": {
+          "scope": "resource",
+          "type": "string",
+          "default": "jdkato/vale",
+          "markdownDescription": "Docker image to run Vale from. Only used when `#vale.docker.enabled#` is true."
+        },
+        "vale.docker.extraArgs": {
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace. Only used when `#vale.docker.enabled#` is true."
         },
         "vale.valeCLI.lintOnChange": {
           "scope": "resource",

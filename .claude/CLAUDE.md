@@ -23,6 +23,8 @@ point / extension host entry); the actual logic is split by concern:
 - [`src/workspaceFolders.ts`](../src/workspaceFolders.ts) - shared
   workspace-folder identity helpers (used by both `languageServer.ts` and
   `commands.ts`).
+- [`src/docker.ts`](../src/docker.ts) - generates the per-folder Docker
+  wrapper script used when `vale.docker.enabled` is set.
 
 Pure, `vscode`-free helpers live in [`src/utils.ts`](../src/utils.ts).
 

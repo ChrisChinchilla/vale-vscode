@@ -15,9 +15,10 @@ import {
   getExpectedChecksum,
   sha256Hex,
 } from "./utils";
-import { buildValeConfig } from "./config";
+import { buildValeConfig, resolveDockerOptions } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { isServerReplaceFix } from "./codeActions";
+import { ensureDockerWrapperScript } from "./docker";
 
 import {
   LanguageClient,
@@ -204,6 +205,7 @@ export async function stopAllClients(): Promise<void> {
  */
 export async function startClientForFolder(
   serverPath: string,
+  context: ExtensionContext,
   folder?: vscode.WorkspaceFolder
 ): Promise<void> {
   const key = clientKeyFor(folder);
@@ -211,7 +213,33 @@ export async function startClientForFolder(
 
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-  const valeConfig = buildValeConfig(configuration, workspaceRoot);
+
+  const docker = resolveDockerOptions(configuration);
+  let valeBinaryPath = configuration.get<string>("vale.valeCLI.path") || undefined;
+  let dockerModeActive = false;
+  if (docker) {
+    if (workspaceRoot && folder) {
+      valeBinaryPath = await ensureDockerWrapperScript(
+        context,
+        folder,
+        docker.image,
+        workspaceRoot,
+        docker.extraArgs
+      );
+      dockerModeActive = true;
+    } else {
+      vscode.window.showWarningMessage(
+        "Vale: Docker mode requires a workspace folder and has been ignored for this window."
+      );
+    }
+  }
+
+  const valeConfig = buildValeConfig(
+    configuration,
+    workspaceRoot,
+    valeBinaryPath,
+    dockerModeActive
+  );
 
   const tempArgs: never[] = [];
   // vale-ls resolves vale.ini's file-glob sections (e.g. `[docs/**/*.md]`)
@@ -278,15 +306,16 @@ export async function startClientForFolder(
  * there are none).
  */
 export async function startClientsForCurrentWorkspace(
-  serverPath: string
+  serverPath: string,
+  context: ExtensionContext
 ): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
   if (folders && folders.length > 0) {
     for (const folder of folders) {
-      await startClientForFolder(serverPath, folder);
+      await startClientForFolder(serverPath, context, folder);
     }
   } else {
-    await startClientForFolder(serverPath, undefined);
+    await startClientForFolder(serverPath, context, undefined);
   }
 }
 
@@ -310,7 +339,7 @@ export function registerWorkspaceFolderWatcher(
         await stopAndRemoveClient(noFolderClientKey());
       }
       for (const folder of event.added) {
-        await startClientForFolder(serverPath, folder);
+        await startClientForFolder(serverPath, context, folder);
       }
     })
   );
@@ -327,6 +356,10 @@ const VALE_CONFIG_SETTINGS = [
   "vale.valeCLI.config",
   "vale.valeCLI.syncOnStartup",
   "vale.valeCLI.installVale",
+  "vale.valeCLI.path",
+  "vale.docker.enabled",
+  "vale.docker.image",
+  "vale.docker.extraArgs",
 ];
 
 /**
@@ -348,13 +381,13 @@ export function registerConfigurationWatcher(
               event.affectsConfiguration(setting, folder.uri)
             )
           ) {
-            await startClientForFolder(serverPath, folder);
+            await startClientForFolder(serverPath, context, folder);
           }
         }
       } else if (
         VALE_CONFIG_SETTINGS.some((setting) => event.affectsConfiguration(setting))
       ) {
-        await startClientForFolder(serverPath, undefined);
+        await startClientForFolder(serverPath, context, undefined);
       }
     })
   );

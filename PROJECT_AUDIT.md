@@ -34,6 +34,8 @@
 
 - [x] **Support multi-root workspaces correctly.** Multi-root operations always use the first workspace folder, regardless of the active file. Upstream multi-root change handling is also currently a no-op. Fixed by running one `LanguageClient` per workspace folder (vale-ls has no native multi-root support), with commands resolving the folder from the active editor and `onDidChangeWorkspaceFolders` starting/stopping clients as folders change. See `.claude/notes/multi-root-workspaces.md`.
 
+- [x] **Support using Vale via Docker.** [Issue #72](https://github.com/ChrisChinchilla/vale-vscode/issues/72): no way to run `vale` from a container instead of a local install. Fixed with `vale.docker.enabled`/`image`/`extraArgs`: a generated per-folder wrapper script points vale-ls's `valeBinaryPath` at `docker run ...`, and the extension's own direct CLI calls (`Sync`/`Show Configuration`/`Show Readability Metrics`, vocabulary lookups) spawn `docker` directly. This also fixed the previously-dead `vale.valeCLI.path` setting along the way: `buildValeConfig` never actually sent `valeBinaryPath` to vale-ls, and the setting was missing from the config-change watch list. See `.claude/notes/docker-support.md`.
+
 - [ ] **Remove or implement no-op settings.** Three settings appear to do nothing in either this extension or current upstream `vale-ls`:
 
   - `vale.maxNumberOfProblems`

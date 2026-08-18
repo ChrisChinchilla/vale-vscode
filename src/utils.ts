@@ -113,6 +113,92 @@ export function buildValeFilterExpression(
   return filters.join(" and ");
 }
 
+/**
+ * Quotes `value` for safe embedding as a literal in a POSIX shell script
+ * (single-quoted, with embedded `'` escaped as `'\''`). Used when writing
+ * the Docker wrapper script: unlike `spawn`'s argv array, text baked into a
+ * script file is interpreted by a shell, so paths/args containing spaces or
+ * shell metacharacters must be quoted to avoid injection.
+ */
+export function shellQuoteSingle(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Builds the argv for running `vale` inside a Docker container, mounting
+ * `workspaceRoot` onto the identical path inside the container so no path
+ * translation is needed anywhere else - vale-ls and the rest of the
+ * extension already pass around host-absolute paths end-to-end (see
+ * `resolveConfigPath` and the `cwd: workspaceRoot` fix for glob sections).
+ *
+ * Deliberately does not prepend a `"vale"` command: the default
+ * `jdkato/vale` image (and any image following its convention) already
+ * sets `ENTRYPOINT ["/bin/vale"]`, so `valeArgs` are the container's actual
+ * argv - adding a literal `"vale"` would make Vale see it as an unwanted
+ * extra positional argument and misparse every subcommand.
+ */
+export function buildDockerRunArgs(
+  image: string,
+  workspaceRoot: string,
+  valeArgs: string[],
+  extraArgs: string[] = []
+): string[] {
+  return [
+    "run",
+    "--rm",
+    "-v",
+    `${workspaceRoot}:${workspaceRoot}`,
+    "-w",
+    workspaceRoot,
+    ...extraArgs,
+    image,
+    ...valeArgs,
+  ];
+}
+
+/**
+ * Generates the content of the wrapper script vale-ls's `valeBinaryPath`
+ * points at when Docker mode is enabled. vale-ls spawns `valeBinaryPath`
+ * directly with no shell, so it needs a real executable file rather than a
+ * bare `docker run ...` command line. vale-ls invokes `valeBinaryPath`
+ * exactly as it would a normal `vale` binary (i.e. with vale's own args,
+ * not prefixed by the word "vale"), and the default `jdkato/vale` image
+ * already sets `ENTRYPOINT ["/bin/vale"]` - so, like `buildDockerRunArgs`,
+ * this doesn't add a literal `"vale"` before the forwarded arguments.
+ */
+export function buildDockerWrapperScript(
+  platform: string,
+  image: string,
+  workspaceRoot: string,
+  extraArgs: string[] = []
+): string {
+  if (platform === "win32") {
+    const dockerArgs = [
+      "run",
+      "--rm",
+      "-v",
+      `"${workspaceRoot}:${workspaceRoot}"`,
+      "-w",
+      `"${workspaceRoot}"`,
+      ...extraArgs,
+      image,
+    ].join(" ");
+    return `@echo off\r\ndocker ${dockerArgs} %*\r\n`;
+  }
+
+  const dockerArgs = [
+    "run",
+    "--rm",
+    "-v",
+    shellQuoteSingle(`${workspaceRoot}:${workspaceRoot}`),
+    "-w",
+    shellQuoteSingle(workspaceRoot),
+    ...extraArgs.map(shellQuoteSingle),
+    shellQuoteSingle(image),
+  ].join(" ");
+  return `#!/usr/bin/env bash\nset -e\nexec docker ${dockerArgs} "$@"\n`;
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

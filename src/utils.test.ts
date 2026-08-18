@@ -4,6 +4,8 @@ import * as path from "node:path";
 
 import {
   EXPECTED_CHECKSUMS,
+  buildDockerRunArgs,
+  buildDockerWrapperScript,
   buildDownloadAssetName,
   buildValeFilterExpression,
   buildValeSpawnOptions,
@@ -13,6 +15,7 @@ import {
   getExpectedChecksum,
   resolveConfigPath,
   sha256Hex,
+  shellQuoteSingle,
   verifyChecksum,
 } from "./utils";
 
@@ -189,5 +192,101 @@ describe("resolveConfigPath", () => {
 
   test("leaves an empty path untouched", () => {
     assert.equal(resolveConfigPath("", workspaceRoot), "");
+  });
+});
+
+describe("shellQuoteSingle", () => {
+  test("wraps a plain value in single quotes", () => {
+    assert.equal(shellQuoteSingle("jdkato/vale"), "'jdkato/vale'");
+  });
+
+  test("preserves spaces without splitting into multiple words", () => {
+    assert.equal(
+      shellQuoteSingle("/path with spaces/root"),
+      "'/path with spaces/root'"
+    );
+  });
+
+  test("escapes embedded single quotes", () => {
+    assert.equal(shellQuoteSingle("it's"), `'it'\\''s'`);
+  });
+
+  test("neutralizes command substitution and backticks", () => {
+    assert.equal(shellQuoteSingle("$(rm -rf /)"), "'$(rm -rf /)'");
+    assert.equal(shellQuoteSingle("`rm -rf /`"), "'`rm -rf /`'");
+  });
+});
+
+describe("buildDockerRunArgs", () => {
+  test("mounts the workspace root onto the identical container path", () => {
+    const args = buildDockerRunArgs("jdkato/vale", "/workspace/root", [
+      "ls-config",
+    ]);
+    assert.deepEqual(args, [
+      "run",
+      "--rm",
+      "-v",
+      "/workspace/root:/workspace/root",
+      "-w",
+      "/workspace/root",
+      "jdkato/vale",
+      "ls-config",
+    ]);
+  });
+
+  test("splices extraArgs before the image name", () => {
+    const args = buildDockerRunArgs(
+      "jdkato/vale",
+      "/workspace/root",
+      ["sync"],
+      ["-v", "/styles:/styles"]
+    );
+    assert.deepEqual(args, [
+      "run",
+      "--rm",
+      "-v",
+      "/workspace/root:/workspace/root",
+      "-w",
+      "/workspace/root",
+      "-v",
+      "/styles:/styles",
+      "jdkato/vale",
+      "sync",
+    ]);
+  });
+});
+
+describe("buildDockerWrapperScript", () => {
+  test("darwin/linux script has a shebang and forwards args via \"$@\"", () => {
+    const script = buildDockerWrapperScript(
+      "linux",
+      "jdkato/vale",
+      "/workspace/root"
+    );
+    assert.ok(script.startsWith("#!/usr/bin/env bash\n"));
+    assert.ok(script.includes("exec docker run --rm"));
+    assert.ok(script.includes(`'/workspace/root:/workspace/root'`));
+    assert.ok(script.includes(`'jdkato/vale'`));
+    assert.ok(script.trim().endsWith(`"$@"`));
+  });
+
+  test("quotes a workspace root containing spaces on POSIX", () => {
+    const script = buildDockerWrapperScript(
+      "darwin",
+      "jdkato/vale",
+      "/path with spaces/root"
+    );
+    assert.ok(script.includes(`'/path with spaces/root:/path with spaces/root'`));
+  });
+
+  test("win32 script uses %* to forward args", () => {
+    const script = buildDockerWrapperScript(
+      "win32",
+      "jdkato/vale",
+      "C:\\workspace\\root"
+    );
+    assert.ok(script.startsWith("@echo off\r\n"));
+    assert.ok(script.includes(`"C:\\workspace\\root:C:\\workspace\\root"`));
+    assert.ok(script.trim().endsWith("%*"));
   });
 });
