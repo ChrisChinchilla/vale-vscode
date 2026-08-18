@@ -6,6 +6,29 @@ import { getRelevantWorkspaceFolder } from "./workspaceFolders";
 import { addToVocabulary } from "./vocabulary";
 import { runValeCommand } from "./cli";
 import { getValeOutputChannel, registerValeCommandsTreeView } from "./ui";
+import { resolveValeExecutionOptions } from "./config";
+import type { ValeExecutionOptions } from "./utils";
+import { getWindowsDockerProxy } from "./docker";
+
+function resolveCommandExecution(
+  configuration: vscode.WorkspaceConfiguration,
+  workspaceRoot: string | undefined,
+  context: ExtensionContext
+): ValeExecutionOptions {
+  const windowsProxy =
+    process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
+  const execution = resolveValeExecutionOptions(
+    configuration,
+    workspaceRoot,
+    process.platform,
+    windowsProxy?.path,
+    windowsProxy?.unavailableReason
+  );
+  if (execution.dockerUnavailableReason) {
+    vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
+  }
+  return execution;
+}
 
 /**
  * Registers all user-facing Vale commands (command palette, editor context
@@ -47,7 +70,18 @@ export function registerCommands(context: ExtensionContext): void {
       try {
         const workingDir = folder?.uri.fsPath ??
                           path.dirname(editor.document.uri.fsPath);
-        await addToVocabulary(word, vocabPath, "accept.txt", workingDir);
+        const execution = resolveCommandExecution(
+          configuration,
+          folder?.uri.fsPath,
+          context
+        );
+        await addToVocabulary(
+          word,
+          vocabPath,
+          "accept.txt",
+          workingDir,
+          execution
+        );
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
@@ -88,7 +122,18 @@ export function registerCommands(context: ExtensionContext): void {
       try {
         const workingDir = folder?.uri.fsPath ??
                           path.dirname(editor.document.uri.fsPath);
-        await addToVocabulary(word, vocabPath, "reject.txt", workingDir);
+        const execution = resolveCommandExecution(
+          configuration,
+          folder?.uri.fsPath,
+          context
+        );
+        await addToVocabulary(
+          word,
+          vocabPath,
+          "reject.txt",
+          workingDir,
+          execution
+        );
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
@@ -100,14 +145,20 @@ export function registerCommands(context: ExtensionContext): void {
   // Helper function to run vale sync
   const runValeSync = async () => {
     try {
-      const workingDir =
-        getRelevantWorkspaceFolder()?.uri.fsPath ?? process.cwd();
+      const folder = getRelevantWorkspaceFolder();
+      const workingDir = folder?.uri.fsPath ?? process.cwd();
+      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
+      const execution = resolveCommandExecution(
+        configuration,
+        folder?.uri.fsPath,
+        context
+      );
 
       valeOutputChannel.clear();
       valeOutputChannel.show(true);
       valeOutputChannel.appendLine("Running vale sync...\n");
 
-      await runValeCommand(["sync"], workingDir);
+      await runValeCommand(["sync"], workingDir, execution);
 
       valeOutputChannel.appendLine("\nSync completed successfully.");
       vscode.window.showInformationMessage("Vale: Sync completed successfully");
@@ -126,14 +177,24 @@ export function registerCommands(context: ExtensionContext): void {
     "vale.showConfig",
     async () => {
       try {
-        const workingDir =
-          getRelevantWorkspaceFolder()?.uri.fsPath ?? process.cwd();
+        const folder = getRelevantWorkspaceFolder();
+        const workingDir = folder?.uri.fsPath ?? process.cwd();
+        const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
+        const execution = resolveCommandExecution(
+          configuration,
+          folder?.uri.fsPath,
+          context
+        );
 
         valeOutputChannel.clear();
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine("Running vale ls-config...\n");
 
-        await runValeCommand(["ls-config"], workingDir);
+        await runValeCommand(
+          ["ls-config"],
+          workingDir,
+          execution
+        );
       } catch (error) {
         vscode.window.showErrorMessage(
           `Vale: Failed to show configuration - ${error instanceof Error ? error.message : String(error)}`
@@ -155,8 +216,14 @@ export function registerCommands(context: ExtensionContext): void {
       const filePath = editor.document.uri.fsPath;
 
       try {
-        const workingDir =
-          getRelevantWorkspaceFolder()?.uri.fsPath ?? path.dirname(filePath);
+        const folder = getRelevantWorkspaceFolder();
+        const workingDir = folder?.uri.fsPath ?? path.dirname(filePath);
+        const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
+        const execution = resolveCommandExecution(
+          configuration,
+          folder?.uri.fsPath,
+          context
+        );
 
         valeOutputChannel.clear();
         valeOutputChannel.show(true);
@@ -164,7 +231,11 @@ export function registerCommands(context: ExtensionContext): void {
           `Running vale ls-metrics for ${path.basename(filePath)}...\n`
         );
 
-        await runValeCommand(["ls-metrics", filePath], workingDir);
+        await runValeCommand(
+          ["ls-metrics", filePath],
+          workingDir,
+          execution
+        );
       } catch (error) {
         vscode.window.showErrorMessage(
           `Vale: Failed to show metrics - ${error instanceof Error ? error.message : String(error)}`

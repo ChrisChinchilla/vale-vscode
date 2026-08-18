@@ -14,10 +14,15 @@ import {
   getExecutableName,
   getExpectedChecksum,
   sha256Hex,
+  buildDockerProxyEnvironment,
 } from "./utils";
-import { buildValeConfig } from "./config";
+import { buildValeConfig, resolveValeExecutionOptions } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { isServerReplaceFix } from "./codeActions";
+import {
+  ensureDockerWrapperScript,
+  getWindowsDockerProxy,
+} from "./docker";
 
 import {
   LanguageClient,
@@ -204,6 +209,7 @@ export async function stopAllClients(): Promise<void> {
  */
 export async function startClientForFolder(
   serverPath: string,
+  context: ExtensionContext,
   folder?: vscode.WorkspaceFolder
 ): Promise<void> {
   const key = clientKeyFor(folder);
@@ -211,14 +217,55 @@ export async function startClientForFolder(
 
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-  const valeConfig = buildValeConfig(configuration, workspaceRoot);
+
+  const windowsProxy =
+    process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
+  const execution = resolveValeExecutionOptions(
+    configuration,
+    workspaceRoot,
+    process.platform,
+    windowsProxy?.path,
+    windowsProxy?.unavailableReason
+  );
+  // Leave this unset when no custom path is configured so vale-ls can still
+  // honor installVale and manage its own Vale binary.
+  let valeBinaryPath =
+    configuration.get<string>("vale.valeCLI.path") || undefined;
+  if (execution.dockerUnavailableReason) {
+    vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
+  }
+  if (execution.docker?.proxyPath) {
+    valeBinaryPath = execution.docker.proxyPath;
+  } else if (execution.docker && workspaceRoot && folder) {
+    valeBinaryPath = await ensureDockerWrapperScript(
+      context,
+      folder,
+      execution.docker.image,
+      workspaceRoot,
+      execution.docker.extraArgs
+    );
+  }
+
+  const valeConfig = buildValeConfig(
+    configuration,
+    workspaceRoot,
+    valeBinaryPath,
+    Boolean(execution.docker)
+  );
 
   const tempArgs: never[] = [];
   // vale-ls resolves vale.ini's file-glob sections (e.g. `[docs/**/*.md]`)
   // relative to its own working directory. Without an explicit `cwd` here,
   // Node defaults the child process to the extension host's cwd rather than
   // the workspace folder, so those sections silently never match. See #73.
-  const executableOptions = workspaceRoot ? { cwd: workspaceRoot } : undefined;
+  const executableOptions = workspaceRoot
+    ? {
+        cwd: workspaceRoot,
+        env: execution.docker?.proxyPath
+          ? buildDockerProxyEnvironment(execution.docker, workspaceRoot)
+          : process.env,
+      }
+    : undefined;
   const serverOptions: ServerOptions = {
     run: { command: serverPath, args: tempArgs, options: executableOptions },
     debug: { command: serverPath, args: tempArgs, options: executableOptions },
@@ -278,15 +325,16 @@ export async function startClientForFolder(
  * there are none).
  */
 export async function startClientsForCurrentWorkspace(
-  serverPath: string
+  serverPath: string,
+  context: ExtensionContext
 ): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
   if (folders && folders.length > 0) {
     for (const folder of folders) {
-      await startClientForFolder(serverPath, folder);
+      await startClientForFolder(serverPath, context, folder);
     }
   } else {
-    await startClientForFolder(serverPath, undefined);
+    await startClientForFolder(serverPath, context, undefined);
   }
 }
 
@@ -310,7 +358,7 @@ export function registerWorkspaceFolderWatcher(
         await stopAndRemoveClient(noFolderClientKey());
       }
       for (const folder of event.added) {
-        await startClientForFolder(serverPath, folder);
+        await startClientForFolder(serverPath, context, folder);
       }
     })
   );
@@ -327,6 +375,10 @@ const VALE_CONFIG_SETTINGS = [
   "vale.valeCLI.config",
   "vale.valeCLI.syncOnStartup",
   "vale.valeCLI.installVale",
+  "vale.valeCLI.path",
+  "vale.docker.enabled",
+  "vale.docker.image",
+  "vale.docker.extraArgs",
 ];
 
 /**
@@ -348,13 +400,13 @@ export function registerConfigurationWatcher(
               event.affectsConfiguration(setting, folder.uri)
             )
           ) {
-            await startClientForFolder(serverPath, folder);
+            await startClientForFolder(serverPath, context, folder);
           }
         }
       } else if (
         VALE_CONFIG_SETTINGS.some((setting) => event.affectsConfiguration(setting))
       ) {
-        await startClientForFolder(serverPath, undefined);
+        await startClientForFolder(serverPath, context, undefined);
       }
     })
   );

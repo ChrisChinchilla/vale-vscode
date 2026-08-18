@@ -113,6 +113,172 @@ export function buildValeFilterExpression(
   return filters.join(" and ");
 }
 
+/**
+ * Quotes `value` for safe embedding as a literal in a POSIX shell script
+ * (single-quoted, with embedded `'` escaped as `'\''`). Used when writing
+ * the Docker wrapper script: unlike `spawn`'s argv array, text baked into a
+ * script file is interpreted by a shell, so paths/args containing spaces or
+ * shell metacharacters must be quoted to avoid injection.
+ */
+export function shellQuoteSingle(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Builds the argv for running `vale` inside a Docker container, mounting
+ * `workspaceRoot` onto the identical path inside the container so no path
+ * translation is needed anywhere else - vale-ls and the rest of the
+ * extension already pass around host-absolute paths end-to-end (see
+ * `resolveConfigPath` and the `cwd: workspaceRoot` fix for glob sections).
+ *
+ * Deliberately does not prepend a `"vale"` command: the default
+ * `jdkato/vale` image (and any image following its convention) already
+ * sets `ENTRYPOINT ["/bin/vale"]`, so `valeArgs` are the container's actual
+ * argv - adding a literal `"vale"` would make Vale see it as an unwanted
+ * extra positional argument and misparse every subcommand.
+ *
+ * Includes `-i` (keep stdin open) for parity with the Windows proxy
+ * (`native/vale-docker-proxy`), which forwards stdin explicitly - without
+ * it, the container's stdin is closed immediately regardless of what the
+ * host process has open, silently dropping anything vale-ls pipes in.
+ */
+export function buildDockerRunArgs(
+  image: string,
+  workspaceRoot: string,
+  valeArgs: string[],
+  extraArgs: string[] = []
+): string[] {
+  return [
+    "run",
+    "--rm",
+    "-i",
+    "-v",
+    `${workspaceRoot}:${workspaceRoot}`,
+    "-w",
+    workspaceRoot,
+    ...extraArgs,
+    image,
+    ...valeArgs,
+  ];
+}
+
+/**
+ * Maps `process.arch` to the architecture suffix `vale-docker-proxy`'s
+ * shipped binaries use (`native/vale-docker-proxy/bin/
+ * vale-docker-proxy-windows-<arch>.exe`), or `null` when this extension
+ * doesn't build a proxy for that architecture. Distinct from `detectArch`,
+ * which uses Rust-target-triple-style names (`x86_64`/`aarch64`) for the
+ * unrelated vale-ls download asset names.
+ */
+export function resolveWindowsDockerProxyArch(
+  processArch: string
+): "x64" | "arm64" | null {
+  if (processArch === "x64") return "x64";
+  if (processArch === "arm64") return "arm64";
+  return null;
+}
+
+export interface DockerOptions {
+  image: string;
+  extraArgs: string[];
+  proxyPath?: string;
+}
+
+export interface ValeExecutionOptions {
+  binaryPath: string;
+  docker?: DockerOptions;
+  dockerUnavailableReason?: string;
+}
+
+/** Resolves the executable used by both vale-ls and direct Vale commands. */
+export function resolveValeExecutionSettings(
+  binaryPath: string | undefined,
+  dockerEnabled: boolean,
+  workspaceRoot: string | undefined,
+  platform: string,
+  dockerImage: string | undefined,
+  dockerExtraArgs: string[] | undefined,
+  windowsProxyPath?: string,
+  windowsProxyUnavailableReason?: string
+): ValeExecutionOptions {
+  const localBinaryPath = binaryPath || "vale";
+  if (!dockerEnabled) {
+    return { binaryPath: localBinaryPath };
+  }
+
+  if (!workspaceRoot) {
+    return {
+      binaryPath: localBinaryPath,
+      dockerUnavailableReason:
+        "Docker mode requires a workspace folder and has been ignored for this window.",
+    };
+  }
+
+  if (platform === "win32" && !windowsProxyPath) {
+    return {
+      binaryPath: localBinaryPath,
+      dockerUnavailableReason:
+        windowsProxyUnavailableReason ??
+        "Docker mode requires the Windows Docker proxy, which isn't available. Using the configured local Vale binary instead.",
+    };
+  }
+
+  return {
+    binaryPath: localBinaryPath,
+    docker: {
+      image: dockerImage || "jdkato/vale",
+      extraArgs: dockerExtraArgs ?? [],
+      ...(platform === "win32" && windowsProxyPath
+        ? { proxyPath: windowsProxyPath }
+        : {}),
+    },
+  };
+}
+
+export function buildDockerProxyEnvironment(
+  docker: DockerOptions,
+  workspaceRoot: string
+): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    VALE_DOCKER_PROXY_CONFIG: JSON.stringify({
+      image: docker.image,
+      root: workspaceRoot,
+      extraArgs: docker.extraArgs,
+    }),
+  };
+}
+
+/**
+ * Generates the content of the wrapper script vale-ls's `valeBinaryPath`
+ * points at when Docker mode is enabled. vale-ls spawns `valeBinaryPath`
+ * directly with no shell, so it needs a real executable file rather than a
+ * bare `docker run ...` command line. vale-ls invokes `valeBinaryPath`
+ * exactly as it would a normal `vale` binary (i.e. with vale's own args,
+ * not prefixed by the word "vale"), and the default `jdkato/vale` image
+ * already sets `ENTRYPOINT ["/bin/vale"]` - so, like `buildDockerRunArgs`,
+ * this doesn't add a literal `"vale"` before the forwarded arguments.
+ * Also includes `-i` for the same stdin-parity reason as `buildDockerRunArgs`.
+ */
+export function buildDockerWrapperScript(
+  image: string,
+  workspaceRoot: string,
+  extraArgs: string[] = []
+): string {
+  const dockerArgs = [
+    "run",
+    "--rm",
+    "-i",
+    "-v",
+    shellQuoteSingle(`${workspaceRoot}:${workspaceRoot}`),
+    "-w",
+    shellQuoteSingle(workspaceRoot),
+    ...extraArgs.map(shellQuoteSingle),
+    shellQuoteSingle(image),
+  ].join(" ");
+  return `#!/usr/bin/env bash\nset -e\nexec docker ${dockerArgs} "$@"\n`;
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

@@ -4,6 +4,7 @@ import fs from "fs";
 import * as vscode from "vscode";
 
 import { getStylesPathsFromVale } from "./cli";
+import type { ValeExecutionOptions } from "./utils";
 
 /**
  * Finds the styles path that contains the vocabulary directory, or returns the first path
@@ -41,10 +42,11 @@ export async function addToVocabulary(
   word: string,
   vocabularyName: string,
   fileName: "accept.txt" | "reject.txt",
-  workspaceRoot: string
+  workspaceRoot: string,
+  execution: ValeExecutionOptions
 ): Promise<void> {
   // Get all styles paths from Vale using ls-config
-  const stylesPaths = await getStylesPathsFromVale(workspaceRoot);
+  const stylesPaths = await getStylesPathsFromVale(workspaceRoot, execution);
 
   if (!stylesPaths || stylesPaths.length === 0) {
     throw new Error(

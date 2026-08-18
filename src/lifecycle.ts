@@ -28,7 +28,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const serverPath = await ensureLanguageServerBinary(context);
 
   console.log("Starting language server(s)");
-  await startClientsForCurrentWorkspace(serverPath);
+  await startClientsForCurrentWorkspace(serverPath, context);
   registerWorkspaceFolderWatcher(context, serverPath);
   registerConfigurationWatcher(context, serverPath);
 

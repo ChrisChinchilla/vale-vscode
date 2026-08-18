@@ -4,6 +4,8 @@ import * as path from "node:path";
 
 import {
   EXPECTED_CHECKSUMS,
+  buildDockerRunArgs,
+  buildDockerWrapperScript,
   buildDownloadAssetName,
   buildValeFilterExpression,
   buildValeSpawnOptions,
@@ -12,7 +14,10 @@ import {
   getExecutableName,
   getExpectedChecksum,
   resolveConfigPath,
+  resolveValeExecutionSettings,
+  resolveWindowsDockerProxyArch,
   sha256Hex,
+  shellQuoteSingle,
   verifyChecksum,
 } from "./utils";
 
@@ -190,4 +195,199 @@ describe("resolveConfigPath", () => {
   test("leaves an empty path untouched", () => {
     assert.equal(resolveConfigPath("", workspaceRoot), "");
   });
+});
+
+describe("shellQuoteSingle", () => {
+  test("wraps a plain value in single quotes", () => {
+    assert.equal(shellQuoteSingle("jdkato/vale"), "'jdkato/vale'");
+  });
+
+  test("preserves spaces without splitting into multiple words", () => {
+    assert.equal(
+      shellQuoteSingle("/path with spaces/root"),
+      "'/path with spaces/root'"
+    );
+  });
+
+  test("escapes embedded single quotes", () => {
+    assert.equal(shellQuoteSingle("it's"), `'it'\\''s'`);
+  });
+
+  test("neutralizes command substitution and backticks", () => {
+    assert.equal(shellQuoteSingle("$(rm -rf /)"), "'$(rm -rf /)'");
+    assert.equal(shellQuoteSingle("`rm -rf /`"), "'`rm -rf /`'");
+  });
+});
+
+describe("buildDockerRunArgs", () => {
+  test("mounts the workspace root onto the identical container path", () => {
+    const args = buildDockerRunArgs("jdkato/vale", "/workspace/root", [
+      "ls-config",
+    ]);
+    assert.deepEqual(args, [
+      "run",
+      "--rm",
+      "-i",
+      "-v",
+      "/workspace/root:/workspace/root",
+      "-w",
+      "/workspace/root",
+      "jdkato/vale",
+      "ls-config",
+    ]);
+  });
+
+  test("splices extraArgs before the image name", () => {
+    const args = buildDockerRunArgs(
+      "jdkato/vale",
+      "/workspace/root",
+      ["sync"],
+      ["-v", "/styles:/styles"]
+    );
+    assert.deepEqual(args, [
+      "run",
+      "--rm",
+      "-i",
+      "-v",
+      "/workspace/root:/workspace/root",
+      "-w",
+      "/workspace/root",
+      "-v",
+      "/styles:/styles",
+      "jdkato/vale",
+      "sync",
+    ]);
+  });
+
+  test("keeps stdin open (-i) for parity with the Windows proxy", () => {
+    const args = buildDockerRunArgs("jdkato/vale", "/workspace/root", ["ls-config"]);
+    assert.ok(args.includes("-i"));
+  });
+});
+
+describe("resolveWindowsDockerProxyArch", () => {
+  test("maps x64 and arm64 to their proxy binary suffixes", () => {
+    assert.equal(resolveWindowsDockerProxyArch("x64"), "x64");
+    assert.equal(resolveWindowsDockerProxyArch("arm64"), "arm64");
+  });
+
+  test("returns null for architectures with no shipped proxy", () => {
+    assert.equal(resolveWindowsDockerProxyArch("ia32"), null);
+    assert.equal(resolveWindowsDockerProxyArch("arm"), null);
+  });
+});
+
+describe("resolveValeExecutionSettings", () => {
+  test("uses the configured local binary for every non-Docker invocation", () => {
+    assert.deepEqual(
+      resolveValeExecutionSettings(
+        "/opt/vale/bin/vale",
+        false,
+        "/workspace",
+        "linux",
+        undefined,
+        undefined
+      ),
+      { binaryPath: "/opt/vale/bin/vale" }
+    );
+  });
+
+  test("enables Docker only for a supported workspace", () => {
+    assert.deepEqual(
+      resolveValeExecutionSettings(
+        undefined,
+        true,
+        "/workspace",
+        "darwin",
+        "custom/vale",
+        ["--pull=always"]
+      ),
+      {
+        binaryPath: "vale",
+        docker: { image: "custom/vale", extraArgs: ["--pull=always"] },
+      }
+    );
+  });
+
+  test("falls back to the configured binary without a workspace", () => {
+    const result = resolveValeExecutionSettings(
+      "/custom/vale",
+      true,
+      undefined,
+      "linux",
+      undefined,
+      undefined
+    );
+    assert.equal(result.binaryPath, "/custom/vale");
+    assert.equal(result.docker, undefined);
+    assert.match(result.dockerUnavailableReason ?? "", /workspace folder/);
+  });
+
+  test("falls back to the configured binary on Windows with a generic reason when none is given", () => {
+    const result = resolveValeExecutionSettings(
+      "C:\\Vale\\vale.exe",
+      true,
+      "C:\\workspace",
+      "win32",
+      undefined,
+      undefined
+    );
+    assert.equal(result.binaryPath, "C:\\Vale\\vale.exe");
+    assert.equal(result.docker, undefined);
+    assert.match(result.dockerUnavailableReason ?? "", /isn't available/);
+  });
+
+  test("surfaces the caller-supplied reason the Windows proxy is unavailable", () => {
+    const result = resolveValeExecutionSettings(
+      "C:\\Vale\\vale.exe",
+      true,
+      "C:\\workspace",
+      "win32",
+      undefined,
+      undefined,
+      undefined,
+      "Docker mode requires the Windows Docker proxy, which isn't built for this architecture (ia32). Using the configured local Vale binary instead."
+    );
+    assert.match(result.dockerUnavailableReason ?? "", /isn't built for this architecture \(ia32\)/);
+  });
+
+  test("enables Docker through the native proxy on Windows", () => {
+    const result = resolveValeExecutionSettings(
+      undefined,
+      true,
+      "C:\\workspace",
+      "win32",
+      "jdkato/vale",
+      [],
+      "C:\\extension\\vale-docker-proxy.exe"
+    );
+    assert.equal(
+      result.docker?.proxyPath,
+      "C:\\extension\\vale-docker-proxy.exe"
+    );
+    assert.equal(result.dockerUnavailableReason, undefined);
+  });
+});
+
+describe("buildDockerWrapperScript", () => {
+  test("darwin/linux script has a shebang and forwards args via \"$@\"", () => {
+    const script = buildDockerWrapperScript(
+      "jdkato/vale",
+      "/workspace/root"
+    );
+    assert.ok(script.startsWith("#!/usr/bin/env bash\n"));
+    assert.ok(script.includes("exec docker run --rm -i"));
+    assert.ok(script.includes(`'/workspace/root:/workspace/root'`));
+    assert.ok(script.includes(`'jdkato/vale'`));
+    assert.ok(script.trim().endsWith(`"$@"`));
+  });
+
+  test("quotes a workspace root containing spaces on POSIX", () => {
+    const script = buildDockerWrapperScript(
+      "jdkato/vale",
+      "/path with spaces/root"
+    );
+    assert.ok(script.includes(`'/path with spaces/root:/path with spaces/root'`));
+  });
+
 });
