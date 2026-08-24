@@ -8,15 +8,19 @@ import * as path from "path";
 
 import {
   LSP_TAG,
+  MIN_VALE_FILTER_VERSION,
   buildDownloadAssetName,
   detectArch,
   detectPlatform,
   getExecutableName,
   getExpectedChecksum,
+  isVersionAtLeast,
+  parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
   isUnsupportedLinuxLibc,
 } from "./utils";
+import type { ValeExecutionOptions } from "./utils";
 import { buildValeConfig, resolveValeExecutionOptions } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { isServerReplaceFix } from "./codeActions";
@@ -25,6 +29,7 @@ import {
   getWindowsDockerProxy,
 } from "./docker";
 import { getValeOutputChannel } from "./ui";
+import { getValeVersionOutput } from "./cli";
 
 import {
   LanguageClient,
@@ -53,6 +58,54 @@ function runtimeGlibcVersion(): string | undefined {
 
 function logDiagnostic(message: string): void {
   getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
+}
+
+/** Appends a timestamped-by-VS-Code line to the Vale output channel. */
+function logDiagnostic(message: string): void {
+  getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
+}
+
+/**
+ * Warns when the Vale CLI vale-ls will invoke predates the version whose
+ * `--filter` flag accepts a raw expression (rather than only a file path or
+ * named asset) - older versions fail every lint with a cryptic
+ * `filter '<expr>' not found` as soon as any filter is sent, which happens
+ * with default settings (`vale.enableSpellcheck` defaults to `false`, and
+ * `buildValeConfig` always sends `.Extends != "spelling"` in that case). See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
+ * `.claude/notes/vale-filter-version-check.md`.
+ *
+ * Only called when `filterExpression` is non-empty, since that's exactly
+ * the condition that triggers the bug - a user with no filter configured
+ * (or an old-but-unfiltered setup) isn't affected and shouldn't be warned.
+ * Failure to determine the version (missing binary, Docker unavailable,
+ * unparseable output) is treated as "can't check" and silently skipped
+ * rather than surfaced as its own error - `client.start()` will still
+ * report the real problem if one exists.
+ */
+async function warnIfValeTooOldForFilters(
+  workingDir: string,
+  execution: ValeExecutionOptions,
+  filterExpression: string
+): Promise<void> {
+  if (!filterExpression) return;
+
+  const output = await getValeVersionOutput(workingDir, execution);
+  if (!output) return;
+
+  const version = parseValeVersion(output);
+  if (!version || isVersionAtLeast(version, MIN_VALE_FILTER_VERSION)) return;
+
+  const [major, minor, patch] = version;
+  const [minMajor, minMinor, minPatch] = MIN_VALE_FILTER_VERSION;
+  const message =
+    `Vale ${major}.${minor}.${patch} is too old to apply Vale VSCode's filter ` +
+    `settings (minAlertLevel/enableSpellcheck) - Vale ${minMajor}.${minMinor}.${minPatch}+ ` +
+    `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
+    `set both vale.valeCLI.minAlertLevel to "inherited" and vale.enableSpellcheck to true ` +
+    `to avoid sending a filter at all.`;
+  logDiagnostic(message);
+  vscode.window.showWarningMessage(`Vale: ${message}`);
 }
 
 export function getArch(): string | null {
@@ -291,6 +344,11 @@ export async function startClientForFolder(
   );
   logDiagnostic(
     `Workspace ${workspaceRoot ?? "<no folder>"}; config ${String(valeConfig.configPath) || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
+  );
+  await warnIfValeTooOldForFilters(
+    workspaceRoot ?? process.cwd(),
+    execution,
+    String(valeConfig.filter)
   );
 
   const tempArgs: never[] = [];
