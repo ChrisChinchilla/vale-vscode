@@ -1,0 +1,15 @@
+{
+  "name": "Vale VS Code issue 54 smoke test",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "vale.valeCLI.path": "/opt/vale/bin/vale",
+        "vale.valeCLI.config": "${workspaceFolder}/test/fixtures/devcontainer/.vale.ini"
+      }
+    }
+  },
+  "postCreateCommand": "/opt/vale/bin/vale --version"
+}

@@ -24,6 +24,8 @@ jobs:
         run: npm run lint
       - name: Test
         run: npm test
+      - name: Extension host smoke test
+        run: xvfb-run -a npm run test:integration
       - name: Webpack (production bundle)
         run: npm run webpack
       - name: Package extension

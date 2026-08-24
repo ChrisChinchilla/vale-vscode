@@ -22,7 +22,7 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
-On first launch the extension downloads the [Vale Language Server](https://github.com/errata-ai/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). If you're upgrading from an older version of this extension, expect a one-time re-download the first time you activate it after upgrading.
+On first launch the extension downloads the [Vale Language Server](https://github.com/vale-cli/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). The installed version is recorded alongside the binary, so upgrading the bundled server version triggers a verified replacement automatically.
 
 ## Features
 
@@ -94,6 +94,25 @@ The extension generates a small wrapper script per workspace folder that mounts 
 
 > [!NOTE]
 > On Windows, the extension ships native x64 and ARM64 proxy executables because vale-ls cannot invoke a batch-file wrapper. The proxy mounts the Windows workspace at `/workspace` in the Linux container, translates command arguments and JSON output paths in both directions, and invokes `docker.exe` without a shell. Unsupported Windows architectures fall back to `vale.valeCLI.path`, or `vale` on `PATH`, with a warning.
+
+### Workspace Trust
+
+The extension supports [Workspace Trust](https://code.visualstudio.com/docs/editing/workspace-trust) in Restricted Mode ("limited" support): linting and highlighting keep working, but:
+
+- `vale.valeCLI.path`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, and all of `vale.docker.*` are locked to their user-level value - a workspace-level override (e.g. in `.vscode/settings.json`) is ignored until you trust the workspace.
+- **Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary add commands are disabled until you trust the workspace, since they run the Vale executable directly.
+
+Trusting the workspace restores the normal settings and re-enables these commands immediately, with no window reload needed.
+
+### Devcontainers and remote workspaces
+
+The extension runs in VS Code's workspace extension host, so paths in `vale.valeCLI.path` and `vale.valeCLI.config` must be valid inside the devcontainer, WSL distribution, SSH host, or Codespace—not only on the local machine. An interactive shell's `PATH` can differ from the extension host's environment; configure an absolute `vale.valeCLI.path` when in doubt.
+
+Use **Vale: Show Diagnostics** to see the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures. **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
+
+Vale Language Server currently publishes GNU-linked Linux binaries. Alpine/musl containers are detected and receive an actionable error; use a glibc-based image until upstream publishes a compatible asset. Docker mode inside an existing devcontainer additionally requires Docker-in-Docker or access to a host Docker daemon—it is not required when Vale is installed directly in the devcontainer.
+
+Maintainers can reproduce issue #54's path setup with `.devcontainer/issue-54/devcontainer.json`, which installs Vale outside the normal `PATH` and supplies its absolute path through remote VS Code settings.
 
 ## Settings
 

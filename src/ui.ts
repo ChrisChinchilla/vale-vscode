@@ -23,13 +23,52 @@ export class ValeCommandItem extends vscode.TreeItem {
 }
 
 export class ValeCommandsProvider
-  implements vscode.TreeDataProvider<ValeCommandItem>
+  implements vscode.TreeDataProvider<ValeCommandItem>, vscode.Disposable
 {
+  private readonly _onDidChangeTreeData =
+    new vscode.EventEmitter<void>();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+  }
+
   getTreeItem(element: ValeCommandItem): vscode.TreeItem {
     return element;
   }
 
   getChildren(): ValeCommandItem[] {
+    // Commands with workspace-linked side effects are gated on Workspace
+    // Trust the same way as their handlers; diagnostics and an explicit
+    // server restart remain available for troubleshooting Restricted Mode.
+    if (!vscode.workspace.isTrusted) {
+      return [
+        new ValeCommandItem(
+          "Trust this workspace to use these commands",
+          "workbench.action.manageTrust",
+          "Manage Workspace Trust",
+          "shield",
+          "Sync, Show Configuration, and Show Metrics all run the Vale executable, which requires a trusted workspace"
+        ),
+        new ValeCommandItem(
+          "Restart Language Server",
+          "vale.restartLanguageServer",
+          "Restart Language Server",
+          "debug-restart"
+        ),
+        new ValeCommandItem(
+          "Show Diagnostics",
+          "vale.showDiagnostics",
+          "Show Diagnostics",
+          "output"
+        ),
+      ];
+    }
+
     return [
       new ValeCommandItem(
         "Sync Packages",
@@ -51,6 +90,20 @@ export class ValeCommandsProvider
         "Show Metrics",
         "graph",
         "Display readability metrics for the active file (vale ls-metrics)"
+      ),
+      new ValeCommandItem(
+        "Restart Language Server",
+        "vale.restartLanguageServer",
+        "Restart Language Server",
+        "debug-restart",
+        "Reinstall if needed and restart every Vale language-server instance"
+      ),
+      new ValeCommandItem(
+        "Show Diagnostics",
+        "vale.showDiagnostics",
+        "Show Diagnostics",
+        "output",
+        "Show Vale startup and execution diagnostics"
       ),
     ];
   }
@@ -78,6 +131,12 @@ export function registerValeCommandsTreeView(
     treeDataProvider: valeCommandsProvider,
     showCollapseAll: false,
   });
-  context.subscriptions.push(valeTreeView);
+  context.subscriptions.push(
+    valeTreeView,
+    valeCommandsProvider,
+    vscode.workspace.onDidGrantWorkspaceTrust(() =>
+      valeCommandsProvider.refresh()
+    )
+  );
   return valeTreeView;
 }
