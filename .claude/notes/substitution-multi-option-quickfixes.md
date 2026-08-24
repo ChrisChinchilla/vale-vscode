@@ -66,3 +66,26 @@ This provider intentionally does nothing for `remove`-action diagnostics
 own `fix`-based quick fix already handles those correctly and there's no
 multi-alternative case to worry about there, so the middleware leaves those
 untouched.
+
+## Guarding against missing `Action` data
+
+The `data.Action` inspection above is deliberately null-safe end to end
+(`getSubstitutionReplacements`/`isServerReplaceAction` in `utils.ts`, used by
+`codeActions.ts`), rather than assuming every `vale-ls`-sourced diagnostic
+carries `data.Action`. This is a direct regression fix for
+https://github.com/ChrisChinchilla/vale-vscode/issues/25: the pre-LSP
+extension (v0.18.4, `src/features/vsProvider.ts` before the rewrite in
+`dc3736d`) read `alert.Action.Name` with no guard in its `provideCodeActions`,
+which crashed the whole provider - `TypeError: Cannot read properties of
+undefined (reading 'Action')` - for any alert whose action was missing. That
+architecture no longer exists (replaced wholesale by the `vale-ls` rewrite),
+but the same unguarded-access shape could reappear here, so the null-safety
+is pulled into pure, unit-tested functions in `utils.ts` rather than left
+implicit in `codeActions.ts` (which can't be unit tested directly - it
+imports `vscode`). See the `getSubstitutionReplacements`/
+`isServerReplaceAction` tests in `utils.test.ts`.
+
+Issue #25 was filed specifically against a remote-SSH session, but nothing
+in the crash or the fix is SSH-specific - it reproduces identically in a
+local window whenever the alert data has no `Action`. Likely reported from
+SSH by coincidence of who was running the affected version at the time.

@@ -279,6 +279,53 @@ export function buildDockerWrapperScript(
   return `#!/usr/bin/env bash\nset -e\nexec docker ${dockerArgs} "$@"\n`;
 }
 
+/**
+ * The subset of vale-ls's raw alert JSON (see its `ValeAlert`/`ValeAction`
+ * structs) that we need. vale-ls attaches this as each diagnostic's LSP
+ * `data` field; vscode-languageclient carries it through at runtime as
+ * `diagnostic.data`, but it's not guaranteed to be present or to have an
+ * `Action` - not every alert is actionable, and some LSP transports drop
+ * unrecognized fields. An earlier version of this extension read
+ * `alert.Action.Name` with no guard, which crashed the whole code action
+ * provider (and any diagnostics rendered from it) whenever an alert lacked
+ * an `Action` - see https://github.com/ChrisChinchilla/vale-vscode/issues/25.
+ */
+export interface ValeAlertData {
+  Action?: {
+    Name?: string;
+    Params?: string[];
+  };
+}
+
+/**
+ * Extracts the "Replace with '...'" candidates for a substitution-rule
+ * alert (e.g. `whatif: what if|options|more`) from vale-ls's alert data,
+ * reading them straight out of the `data` field instead of going through
+ * its `fix` RPC, which has historically collapsed multiple alternatives
+ * into duplicates. Returns an empty array for anything that isn't a
+ * `replace` action with at least one param, including missing/malformed
+ * `data` - deliberately tolerant, since a malformed alert should just
+ * produce no quick fixes rather than crash the provider (see
+ * `ValeAlertData` above). https://github.com/ChrisChinchilla/vale-vscode/issues/7
+ */
+export function getSubstitutionReplacements(
+  data: ValeAlertData | undefined
+): string[] {
+  const action = data?.Action;
+  if (action?.Name !== "replace" || !action.Params?.length) return [];
+  return action.Params;
+}
+
+/**
+ * True for alert data vale-ls's own `fix` RPC would have turned into a
+ * `replace`-action quick fix - the case `getSubstitutionReplacements`
+ * above now owns. Used to filter those out of what the server returns so
+ * they don't stack with our own, correct ones in the same lightbulb menu.
+ */
+export function isServerReplaceAction(data: ValeAlertData | undefined): boolean {
+  return data?.Action?.Name === "replace";
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

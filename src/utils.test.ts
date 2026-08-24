@@ -13,6 +13,8 @@ import {
   detectPlatform,
   getExecutableName,
   getExpectedChecksum,
+  getSubstitutionReplacements,
+  isServerReplaceAction,
   resolveConfigPath,
   resolveValeExecutionSettings,
   resolveWindowsDockerProxyArch,
@@ -366,6 +368,64 @@ describe("resolveValeExecutionSettings", () => {
       "C:\\extension\\vale-docker-proxy.exe"
     );
     assert.equal(result.dockerUnavailableReason, undefined);
+  });
+});
+
+describe("getSubstitutionReplacements", () => {
+  // Regression coverage for https://github.com/ChrisChinchilla/vale-vscode/issues/25:
+  // reading `alert.Action.Name` with no guard threw "Cannot read properties
+  // of undefined (reading 'Action')" whenever an alert's `data` (or its
+  // `Action`) was missing.
+  test("returns no replacements when data is undefined", () => {
+    assert.deepEqual(getSubstitutionReplacements(undefined), []);
+  });
+
+  test("returns no replacements when Action is missing", () => {
+    assert.deepEqual(getSubstitutionReplacements({}), []);
+  });
+
+  test("returns no replacements for a non-replace action", () => {
+    assert.deepEqual(
+      getSubstitutionReplacements({ Action: { Name: "suggest" } }),
+      []
+    );
+  });
+
+  test("returns no replacements when Params is empty", () => {
+    assert.deepEqual(
+      getSubstitutionReplacements({ Action: { Name: "replace", Params: [] } }),
+      []
+    );
+  });
+
+  test("returns the params for a replace action", () => {
+    assert.deepEqual(
+      getSubstitutionReplacements({
+        Action: { Name: "replace", Params: ["what if", "options"] },
+      }),
+      ["what if", "options"]
+    );
+  });
+});
+
+describe("isServerReplaceAction", () => {
+  test("is false when data is undefined", () => {
+    assert.equal(isServerReplaceAction(undefined), false);
+  });
+
+  test("is false when Action is missing", () => {
+    assert.equal(isServerReplaceAction({}), false);
+  });
+
+  test("is false for a non-replace action", () => {
+    assert.equal(isServerReplaceAction({ Action: { Name: "suggest" } }), false);
+  });
+
+  test("is true for a replace action", () => {
+    assert.equal(
+      isServerReplaceAction({ Action: { Name: "replace", Params: ["x"] } }),
+      true
+    );
   });
 });
 

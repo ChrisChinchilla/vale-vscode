@@ -1,20 +1,17 @@
 import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
+import {
+  ValeAlertData,
+  getSubstitutionReplacements,
+  isServerReplaceAction,
+} from "./utils";
 
 /**
- * The subset of vale-ls's raw alert JSON (see its `ValeAlert`/`ValeAction`
- * structs) that we need. vale-ls attaches this as each diagnostic's LSP
- * `data` field; vscode-languageclient carries it through at runtime as
+ * vale-ls attaches its raw alert JSON as each diagnostic's LSP `data`
+ * field; vscode-languageclient carries it through at runtime as
  * `diagnostic.data`, even though that property isn't part of the public
  * `vscode.Diagnostic` type.
  */
-export interface ValeAlertData {
-  Action?: {
-    Name?: string;
-    Params?: string[];
-  };
-}
-
 export function alertDataOf(diagnostic: vscode.Diagnostic): ValeAlertData | undefined {
   return (diagnostic as vscode.Diagnostic & { data?: ValeAlertData }).data;
 }
@@ -45,10 +42,9 @@ export class ValeSubstitutionCodeActionProvider implements vscode.CodeActionProv
     for (const diagnostic of context.diagnostics) {
       if (diagnostic.source !== "vale-ls") continue;
 
-      const action = alertDataOf(diagnostic)?.Action;
-      if (action?.Name !== "replace" || !action.Params?.length) continue;
+      const replacements = getSubstitutionReplacements(alertDataOf(diagnostic));
 
-      for (const replacement of action.Params) {
+      for (const replacement of replacements) {
         const fix = new vscode.CodeAction(
           `Replace with ‘${replacement}’`,
           vscode.CodeActionKind.QuickFix
@@ -75,7 +71,7 @@ export function isServerReplaceFix(item: vscode.CodeAction | vscode.Command): bo
   if (!("diagnostics" in item) || !item.diagnostics?.length) return false;
   const diagnostic = item.diagnostics[0];
   if (diagnostic.source !== "vale-ls") return false;
-  return alertDataOf(diagnostic)?.Action?.Name === "replace";
+  return isServerReplaceAction(alertDataOf(diagnostic));
 }
 
 export function registerCodeActions(context: ExtensionContext): void {
