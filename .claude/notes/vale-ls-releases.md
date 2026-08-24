@@ -53,6 +53,44 @@ upgrading from a version that stored `vale-ls` next to the extension files
 will see a one-time re-download after upgrading, since the old binary won't
 be found at the new path. Documented in `README.md`.
 
+## Issues #61 and #83: wrong-architecture binary, already fixed on `main`
+
+https://github.com/ChrisChinchilla/vale-vscode/issues/61 and
+https://github.com/ChrisChinchilla/vale-vscode/issues/83 are the same bug:
+a macOS/ARM64 (or otherwise wrong-platform) `vale-ls` binary ends up
+installed on a Linux x86_64 machine, so the server fails immediately
+(`cannot execute binary file`, exit 126, or "Mach-O 64-bit arm64 executable"
+via `file`). Reports span v0.30.0 through v0.32.0 and are commonly, though
+not exclusively, from Remote-WSL/Remote-SSH setups. Every reporter who tried
+it found the same workaround: delete the installed `vale-ls` and let the
+extension redownload it, which always produces the correct binary.
+
+**Root cause**: the pre-hardening `downloadLSP` wrote the downloaded binary
+into `context.extensionPath` - the extension's own versioned install
+directory - rather than dedicated per-machine writable storage. That
+directory isn't guaranteed to be treated as pure local, dynamic state by
+VS Code; several reports come from Remote-WSL/Remote-SSH sessions, where
+extension-install caching/replication between the local and remote side is
+a known source of exactly this kind of cross-platform file mixup. This is a
+plausible mechanism inferred from the symptoms (matches every report:
+wrong-platform binary specifically at the extension's own install path,
+self-heals on delete-and-redownload), not something independently proven
+against VS Code's internals from here - but it doesn't matter which exact
+mechanism caused it, because the fix removes the shared directory entirely.
+
+**Fix, already on `main`** (commit `916bfbe` at time of writing, still
+unreleased - latest published tag is v0.34.0): the binary now installs to
+`context.globalStorageUri.fsPath` (see "Install location" above) via an
+atomic, checksum-verified install, with a `.vale-ls-version` marker that
+forces replacement of any stale or wrong-platform install left over from
+before this fix shipped. `buildDownloadAssetName(process.platform,
+process.arch)` (unchanged) also means the extension can only ever *request*
+the correct platform's asset in the first place - the old bug was about a
+wrong binary already on disk surviving, which the new install path no
+longer allows.
+
+Next release should close both issues.
+
 ## Download hardening, end to end
 
 `downloadLSP` (src/lsp.ts):
