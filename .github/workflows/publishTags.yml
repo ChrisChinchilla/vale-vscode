@@ -11,6 +11,9 @@ jobs:
   validate:
     needs: parity
     if: needs.parity.outputs.is_prerelease == 'false'
+    permissions:
+      contents: write
+      pull-requests: write
     uses: ./.github/workflows/build.yaml
 
   deploy:
