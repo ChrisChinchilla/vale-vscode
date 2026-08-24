@@ -47,6 +47,11 @@ import {
  */
 const clients: Map<string, LanguageClient> = new Map();
 
+/** Appends a timestamped-by-VS-Code line to the Vale output channel. */
+function logDiagnostic(message: string): void {
+  getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
+}
+
 /**
  * Warns when the Vale CLI vale-ls will invoke predates the version whose
  * `--filter` flag accepts a raw expression (rather than only a file path or
