@@ -7,6 +7,7 @@ import {
   buildDockerRunArgs,
   buildDockerWrapperScript,
   buildDownloadAssetName,
+  buildValeConfigArgs,
   buildValeFilterExpression,
   buildValeSpawnOptions,
   detectArch,
@@ -143,6 +144,19 @@ describe("buildValeSpawnOptions", () => {
     const options = buildValeSpawnOptions("/some/workspace");
     assert.equal(options.cwd, "/some/workspace");
     assert.equal("shell" in options, false);
+  });
+});
+
+describe("buildValeConfigArgs", () => {
+  test("returns no args when no config path is configured", () => {
+    assert.deepEqual(buildValeConfigArgs(""), []);
+  });
+
+  test("returns --config with the resolved path", () => {
+    assert.deepEqual(
+      buildValeConfigArgs("/workspace/src/config/.vale.ini"),
+      ["--config", "/workspace/src/config/.vale.ini"]
+    );
   });
 });
 

@@ -56,11 +56,7 @@ function runtimeGlibcVersion(): string | undefined {
     ?.glibcVersionRuntime;
 }
 
-function logDiagnostic(message: string): void {
-  getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
-}
-
-/** Appends a timestamped-by-VS-Code line to the Vale output channel. */
+/** Appends a line to the Vale output channel, prefixed for grep-ability. */
 function logDiagnostic(message: string): void {
   getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
 }

@@ -43,10 +43,15 @@ export async function addToVocabulary(
   vocabularyName: string,
   fileName: "accept.txt" | "reject.txt",
   workspaceRoot: string,
-  execution: ValeExecutionOptions
+  execution: ValeExecutionOptions,
+  configPath = ""
 ): Promise<void> {
   // Get all styles paths from Vale using ls-config
-  const stylesPaths = await getStylesPathsFromVale(workspaceRoot, execution);
+  const stylesPaths = await getStylesPathsFromVale(
+    workspaceRoot,
+    execution,
+    configPath
+  );
 
   if (!stylesPaths || stylesPaths.length === 0) {
     throw new Error(

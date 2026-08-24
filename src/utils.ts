@@ -373,6 +373,23 @@ export function isVersionAtLeast(
   return true;
 }
 
+/**
+ * Builds the `--config` argv prefix for a direct Vale CLI invocation
+ * (Sync/Show Configuration/Show Readability Metrics/vocabulary lookups),
+ * given `vale.valeCLI.config` already resolved to an absolute path by
+ * `resolveConfigPath`. Without this, those commands relied entirely on
+ * Vale's own ancestor-search config discovery from the working directory,
+ * which never finds a config file that lives in a subdirectory rather than
+ * at or above the search's starting point - exactly the case for a
+ * `vale.valeCLI.config` like `src/config/.vale.ini`, where linting (which
+ * *does* send `configPath` to vale-ls) worked but these commands silently
+ * used the wrong (or no) config and failed. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/100.
+ */
+export function buildValeConfigArgs(configPath: string): string[] {
+  return configPath ? ["--config", configPath] : [];
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

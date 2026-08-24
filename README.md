@@ -70,6 +70,8 @@ The following commands are available from the **Vale** panel in the Explorer sid
 - **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
 
+These commands (and the vocabulary commands below) honor `vale.valeCLI.config` if it's set, the same way linting does - they don't rely on Vale's own automatic config discovery, which only searches the current directory and its parents and so can't find a config file that lives in a subdirectory.
+
 ### Add to Vale vocabulary
 
 You can add words to [Vale vocabulary lists](https://vale.sh/docs/keys/vocab) direct from the editor. Make sure to set the `vale.vocabPath` setting to name the vocabulary to write to. Find the menus by selecting the word and right-clicking, or set keybindings for the commands.

@@ -7,8 +7,26 @@ import { addToVocabulary } from "./vocabulary";
 import { runValeCommand } from "./cli";
 import { getValeOutputChannel, registerValeCommandsTreeView } from "./ui";
 import { resolveValeExecutionOptions } from "./config";
+import { buildValeConfigArgs, resolveConfigPath } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { getWindowsDockerProxy } from "./docker";
+
+/**
+ * Resolves `vale.valeCLI.config` the same way `buildValeConfig` does for
+ * vale-ls's `initializationOptions` (`config.ts`), so direct CLI commands
+ * (Sync/Show Configuration/Show Readability Metrics/vocabulary lookups) stop
+ * relying on Vale's own ancestor-search config discovery, which linting
+ * doesn't depend on but these commands previously did entirely. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/100.
+ */
+function resolveCommandConfigPath(
+  configuration: vscode.WorkspaceConfiguration,
+  workspaceRoot: string | undefined
+): string {
+  const configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
+  if (!workspaceRoot) return configPathRaw;
+  return resolveConfigPath(configPathRaw, workspaceRoot);
+}
 
 /**
  * These explicit actions can download packages or read/write workspace-linked
@@ -103,12 +121,17 @@ export function registerCommands(
           folder?.uri.fsPath,
           context
         );
+        const configPath = resolveCommandConfigPath(
+          configuration,
+          folder?.uri.fsPath
+        );
         await addToVocabulary(
           word,
           vocabPath,
           "accept.txt",
           workingDir,
-          execution
+          execution,
+          configPath
         );
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -157,12 +180,17 @@ export function registerCommands(
           folder?.uri.fsPath,
           context
         );
+        const configPath = resolveCommandConfigPath(
+          configuration,
+          folder?.uri.fsPath
+        );
         await addToVocabulary(
           word,
           vocabPath,
           "reject.txt",
           workingDir,
-          execution
+          execution,
+          configPath
         );
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -185,11 +213,19 @@ export function registerCommands(
         folder?.uri.fsPath,
         context
       );
+      const configPath = resolveCommandConfigPath(
+        configuration,
+        folder?.uri.fsPath
+      );
 
       valeOutputChannel.show(true);
       valeOutputChannel.appendLine("\nRunning vale sync...\n");
 
-      await runValeCommand(["sync"], workingDir, execution);
+      await runValeCommand(
+        [...buildValeConfigArgs(configPath), "sync"],
+        workingDir,
+        execution
+      );
 
       valeOutputChannel.appendLine("\nSync completed successfully.");
       vscode.window.showInformationMessage("Vale: Sync completed successfully");
@@ -218,12 +254,16 @@ export function registerCommands(
           folder?.uri.fsPath,
           context
         );
+        const configPath = resolveCommandConfigPath(
+          configuration,
+          folder?.uri.fsPath
+        );
 
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine("\nRunning vale ls-config...\n");
 
         await runValeCommand(
-          ["ls-config"],
+          [...buildValeConfigArgs(configPath), "ls-config"],
           workingDir,
           execution
         );
@@ -258,6 +298,10 @@ export function registerCommands(
           folder?.uri.fsPath,
           context
         );
+        const configPath = resolveCommandConfigPath(
+          configuration,
+          folder?.uri.fsPath
+        );
 
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine(
@@ -265,7 +309,7 @@ export function registerCommands(
         );
 
         await runValeCommand(
-          ["ls-metrics", filePath],
+          [...buildValeConfigArgs(configPath), "ls-metrics", filePath],
           workingDir,
           execution
         );

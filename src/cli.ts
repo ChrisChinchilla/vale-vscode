@@ -3,6 +3,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import {
   buildDockerProxyEnvironment,
   buildDockerRunArgs,
+  buildValeConfigArgs,
   buildValeSpawnOptions,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
@@ -102,14 +103,25 @@ export async function getValeVersionOutput(
 }
 
 /**
- * Gets all styles paths from Vale's configuration using `vale ls-config`
+ * Gets all styles paths from Vale's configuration using `vale ls-config`.
+ *
+ * `configPath`, when given, is an already-resolved absolute path to pass as
+ * `--config` - without it, this relies entirely on Vale's own ancestor-search
+ * config discovery from `workspaceRoot`, which never finds a config file
+ * that lives in a subdirectory rather than at or above that search's
+ * starting point. See https://github.com/ChrisChinchilla/vale-vscode/issues/100.
  */
 export async function getStylesPathsFromVale(
   workspaceRoot: string,
-  execution: ValeExecutionOptions
+  execution: ValeExecutionOptions,
+  configPath = ""
 ): Promise<string | null> {
   return new Promise((resolve) => {
-    const valeProcess = spawnVale(["ls-config"], workspaceRoot, execution);
+    const valeProcess = spawnVale(
+      [...buildValeConfigArgs(configPath), "ls-config"],
+      workspaceRoot,
+      execution
+    );
 
     let stdout = "";
     let stderr = "";
