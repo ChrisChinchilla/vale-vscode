@@ -10,6 +10,29 @@ import { resolveValeExecutionOptions } from "./config";
 import type { ValeExecutionOptions } from "./utils";
 import { getWindowsDockerProxy } from "./docker";
 
+/**
+ * These explicit actions can download packages or read/write workspace-linked
+ * resources. Their executable/configuration settings are already locked to
+ * user-level values in Restricted Mode (see `capabilities.untrustedWorkspaces`
+ * in package.json); blocking the actions as well prevents surprising side
+ * effects from an untrusted workspace. See .claude/notes/workspace-trust.md and
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/54.
+ */
+function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) return true;
+  vscode.window
+    .showWarningMessage(
+      "Vale: this command requires a trusted workspace.",
+      "Manage Workspace Trust"
+    )
+    .then((choice) => {
+      if (choice === "Manage Workspace Trust") {
+        vscode.commands.executeCommand("workbench.action.manageTrust");
+      }
+    });
+  return false;
+}
+
 function resolveCommandExecution(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
@@ -34,13 +57,18 @@ function resolveCommandExecution(
  * Registers all user-facing Vale commands (command palette, editor context
  * menu, and the "Vale" Explorer sidebar tree view).
  */
-export function registerCommands(context: ExtensionContext): void {
+export function registerCommands(
+  context: ExtensionContext,
+  restartLanguageServer: () => Promise<void>
+): void {
   const valeOutputChannel = getValeOutputChannel();
 
   // Register vocabulary commands
   const addToAcceptCommand = vscode.commands.registerCommand(
     "vale.addToAcceptList",
     async () => {
+      if (!requireTrustedWorkspace()) return;
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showErrorMessage("No active editor");
@@ -93,6 +121,8 @@ export function registerCommands(context: ExtensionContext): void {
   const addToRejectCommand = vscode.commands.registerCommand(
     "vale.addToRejectList",
     async () => {
+      if (!requireTrustedWorkspace()) return;
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showErrorMessage("No active editor");
@@ -144,6 +174,8 @@ export function registerCommands(context: ExtensionContext): void {
 
   // Helper function to run vale sync
   const runValeSync = async () => {
+    if (!requireTrustedWorkspace()) return;
+
     try {
       const folder = getRelevantWorkspaceFolder();
       const workingDir = folder?.uri.fsPath ?? process.cwd();
@@ -154,9 +186,8 @@ export function registerCommands(context: ExtensionContext): void {
         context
       );
 
-      valeOutputChannel.clear();
       valeOutputChannel.show(true);
-      valeOutputChannel.appendLine("Running vale sync...\n");
+      valeOutputChannel.appendLine("\nRunning vale sync...\n");
 
       await runValeCommand(["sync"], workingDir, execution);
 
@@ -176,6 +207,8 @@ export function registerCommands(context: ExtensionContext): void {
   const showConfigCommand = vscode.commands.registerCommand(
     "vale.showConfig",
     async () => {
+      if (!requireTrustedWorkspace()) return;
+
       try {
         const folder = getRelevantWorkspaceFolder();
         const workingDir = folder?.uri.fsPath ?? process.cwd();
@@ -186,9 +219,8 @@ export function registerCommands(context: ExtensionContext): void {
           context
         );
 
-        valeOutputChannel.clear();
         valeOutputChannel.show(true);
-        valeOutputChannel.appendLine("Running vale ls-config...\n");
+        valeOutputChannel.appendLine("\nRunning vale ls-config...\n");
 
         await runValeCommand(
           ["ls-config"],
@@ -207,6 +239,8 @@ export function registerCommands(context: ExtensionContext): void {
   const showMetricsCommand = vscode.commands.registerCommand(
     "vale.showMetrics",
     async () => {
+      if (!requireTrustedWorkspace()) return;
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showErrorMessage("Vale: No active editor");
@@ -225,10 +259,9 @@ export function registerCommands(context: ExtensionContext): void {
           context
         );
 
-        valeOutputChannel.clear();
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine(
-          `Running vale ls-metrics for ${path.basename(filePath)}...\n`
+          `\nRunning vale ls-metrics for ${path.basename(filePath)}...\n`
         );
 
         await runValeCommand(
@@ -244,6 +277,31 @@ export function registerCommands(context: ExtensionContext): void {
     }
   );
 
+  const showDiagnosticsCommand = vscode.commands.registerCommand(
+    "vale.showDiagnostics",
+    () => valeOutputChannel.show(true)
+  );
+
+  const restartLanguageServerCommand = vscode.commands.registerCommand(
+    "vale.restartLanguageServer",
+    async () => {
+      valeOutputChannel.show(true);
+      valeOutputChannel.appendLine("[diagnostics] Restart requested by user");
+      try {
+        await restartLanguageServer();
+        vscode.window.showInformationMessage(
+          "Vale: Language Server restarted successfully"
+        );
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        valeOutputChannel.appendLine(`[diagnostics] Restart failed: ${detail}`);
+        vscode.window.showErrorMessage(
+          `Vale: Failed to restart Language Server - ${detail}`
+        );
+      }
+    }
+  );
+
   // Register the Vale commands TreeView in the Explorer sidebar
   registerValeCommandsTreeView(context);
 
@@ -252,6 +310,8 @@ export function registerCommands(context: ExtensionContext): void {
     addToRejectCommand,
     syncCommand,
     showConfigCommand,
-    showMetricsCommand
+    showMetricsCommand,
+    showDiagnosticsCommand,
+    restartLanguageServerCommand
   );
 }

@@ -1,5 +1,6 @@
 out
 out-test
+out-integration
 dist
 node_modules
 .vscode-test/

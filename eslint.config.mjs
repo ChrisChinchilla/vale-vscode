@@ -8,6 +8,7 @@ export default [
       "dist/**",
       "out/**",
       "out-test/**",
+      "out-integration/**",
       ".vscode-test/**",
     ],
   },
