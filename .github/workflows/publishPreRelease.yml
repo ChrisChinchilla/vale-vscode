@@ -3,19 +3,19 @@ on:
     tags:
       - "v*"
 
-name: Publish Extension on tag
+name: Publish Pre-Release Extension
 jobs:
   parity:
     uses: ./.github/workflows/versionParity.yml
 
   validate:
     needs: parity
-    if: needs.parity.outputs.is_prerelease == 'false'
+    if: needs.parity.outputs.is_prerelease == 'true'
     uses: ./.github/workflows/build.yaml
 
   deploy:
     needs: [parity, validate]
-    if: needs.parity.outputs.is_prerelease == 'false'
+    if: needs.parity.outputs.is_prerelease == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,12 +24,14 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
-      - name: Publish to Open VSX Registry
+      - name: Publish pre-release to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
-      - name: Publish to Visual Studio Marketplace
+          preRelease: true
+      - name: Publish pre-release to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com
+          preRelease: true

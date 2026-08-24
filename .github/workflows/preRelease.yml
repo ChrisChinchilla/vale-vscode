@@ -1,4 +1,4 @@
-name: Releases
+name: Pre-Releases
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
 
   build:
     needs: parity
-    if: needs.parity.outputs.is_prerelease == 'false'
+    if: needs.parity.outputs.is_prerelease == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -20,3 +20,4 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           generateReleaseNotes: true
+          prerelease: true
