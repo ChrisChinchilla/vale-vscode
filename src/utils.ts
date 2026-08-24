@@ -334,6 +334,45 @@ export function isServerReplaceAction(data: ValeAlertData | undefined): boolean 
   return data?.Action?.Name === "replace";
 }
 
+/**
+ * The oldest Vale CLI version whose `--filter` flag accepts a raw filter
+ * expression (e.g. `.Level in ["suggestion", "warning", "error"]`) rather
+ * than only a file path or a named asset on `StylesPath`. Older versions
+ * fail every lint with `filter '<expr>' not found` as soon as any filter is
+ * sent - which happens by default, since `vale.enableSpellcheck` defaults
+ * to `false` and `buildValeFilterExpression` always emits
+ * `.Extends != "spelling"` in that case. Fixed upstream in
+ * https://github.com/errata-ai/vale/commit/c33614918 ("fix: support filters
+ * through strings or files"), first released in this version. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
+ * `.claude/notes/vale-filter-version-check.md`.
+ */
+export const MIN_VALE_FILTER_VERSION: [number, number, number] = [3, 10, 0];
+
+/**
+ * Parses a `vale --version` output line (e.g. `vale version 3.18.0`, or a
+ * bare `3.18.0`) into a `[major, minor, patch]` tuple. Returns `null` for
+ * anything that doesn't contain a recognizable `X.Y.Z` version.
+ */
+export function parseValeVersion(
+  output: string
+): [number, number, number] | null {
+  const match = output.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/** True when `version` is greater than or equal to `minimum`. */
+export function isVersionAtLeast(
+  version: [number, number, number],
+  minimum: [number, number, number]
+): boolean {
+  for (let i = 0; i < 3; i++) {
+    if (version[i] !== minimum[i]) return version[i] > minimum[i];
+  }
+  return true;
+}
+
 export function resolveConfigPath(
   configPathRaw: string,
   workspaceRoot: string

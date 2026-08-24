@@ -72,6 +72,36 @@ export async function runValeCommand(
 }
 
 /**
+ * Runs `vale --version` and returns its raw output (e.g.
+ * `vale version 3.18.0`), or `null` if the process can't be run at all
+ * (missing binary, Docker unavailable, etc.) - callers that only want to
+ * *warn* about an old Vale should treat that as "couldn't determine the
+ * version" rather than an error worth surfacing on its own.
+ */
+export async function getValeVersionOutput(
+  workingDir: string,
+  execution: ValeExecutionOptions
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const valeProcess = spawnVale(["--version"], workingDir, execution);
+
+    let stdout = "";
+
+    valeProcess.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    valeProcess.on("close", (code) => {
+      resolve(code === 0 ? stdout : null);
+    });
+
+    valeProcess.on("error", () => {
+      resolve(null);
+    });
+  });
+}
+
+/**
  * Gets all styles paths from Vale's configuration using `vale ls-config`
  */
 export async function getStylesPathsFromVale(
