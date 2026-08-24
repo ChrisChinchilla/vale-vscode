@@ -1,0 +1,38 @@
+name: Version Parity
+
+# Shared by every publish/release workflow so the pre-release convention
+# lives in exactly one place. Per VS Code's own publishing docs, the
+# Marketplace does not support semver pre-release suffixes (e.g. `-beta.1`)
+# in package.json - vsce publish rejects them outright. The documented
+# convention is a plain X.Y.Z version everywhere, with an odd minor number
+# marking a pre-release and an even minor marking stable (e.g. 0.31.x is
+# pre-release, 0.32.x is stable). This workflow reads that parity from the
+# pushed tag name so every consumer workflow agrees on it.
+
+on:
+  workflow_call:
+    outputs:
+      is_prerelease:
+        description: "'true' when the pushed tag's minor version is odd."
+        value: ${{ jobs.parity.outputs.is_prerelease }}
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+    steps:
+      - name: Determine pre-release status from the tag's minor version
+        id: check
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          minor="$(echo "$tag" | cut -d. -f2)"
+          if [ -z "$minor" ]; then
+            echo "Could not parse a minor version out of tag '$GITHUB_REF_NAME'" >&2
+            exit 1
+          fi
+          if [ $(( minor % 2 )) -eq 1 ]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi

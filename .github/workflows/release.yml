@@ -3,14 +3,15 @@ name: Releases
 on:
   push:
     tags:
-      - '*'
-      - '!*-alpha*'
-      - '!*-beta*'
-      - '!*-rc*'
+      - "v*"
 
 jobs:
+  parity:
+    uses: ./.github/workflows/versionParity.yml
 
   build:
+    needs: parity
+    if: needs.parity.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
