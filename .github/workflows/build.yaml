@@ -52,12 +52,12 @@ jobs:
         env:
           GOARCH: amd64
           CGO_ENABLED: "0"
-        run: go build -trimpath -ldflags "-s -w -buildid=" -o proxy-x64.exe .
+        run: go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o proxy-x64.exe .
       - name: Build ARM64 proxy
         env:
           GOARCH: arm64
           CGO_ENABLED: "0"
-        run: go build -trimpath -ldflags "-s -w -buildid=" -o proxy-arm64.exe .
+        run: go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o proxy-arm64.exe .
       - name: Check committed binaries against this build
         id: check
         shell: pwsh

@@ -10,9 +10,9 @@ Build both binaries from this directory with Go 1.22 or later:
 $env:CGO_ENABLED = "0"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
-go build -trimpath -ldflags "-s -w -buildid=" -o bin/vale-docker-proxy-windows-x64.exe .
+go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o bin/vale-docker-proxy-windows-x64.exe .
 $env:GOARCH = "arm64"
-go build -trimpath -ldflags "-s -w -buildid=" -o bin/vale-docker-proxy-windows-arm64.exe .
+go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o bin/vale-docker-proxy-windows-arm64.exe .
 ```
 
 You don't need to run this yourself before pushing, though: the
