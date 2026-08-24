@@ -18,10 +18,11 @@ go build -trimpath -ldflags "-s -w -buildid=" -o bin/vale-docker-proxy-windows-a
 You don't need to run this yourself before pushing, though: the
 `windows-docker-proxy` CI job (`.github/workflows/build.yaml`) rebuilds both
 binaries from source on every push/PR to a branch in this repo and, if they
-don't byte-match what's committed, commits the fresh ones back automatically
-and fails that run so it's obvious a fix landed - just re-run or push again.
-It can't push back for a fork PR or a tag (see the job for why); rebuild
-locally with the commands above in those cases.
+don't byte-match what's committed, opens a PR with the refreshed binaries
+and fails that run so it's obvious a fix is waiting - merge the PR, then
+re-run or push again. It opens a PR rather than pushing directly because
+`main` is a protected branch. It can't open a PR for a fork PR or a tag (see
+the job for why); rebuild locally with the commands above in those cases.
 
 The extension passes configuration as JSON in `VALE_DOCKER_PROXY_CONFIG`.
 The proxy executes `docker.exe` directly, translates Windows host paths to
