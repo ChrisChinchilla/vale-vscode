@@ -15,6 +15,9 @@ import {
   getExpectedChecksum,
   getSubstitutionReplacements,
   isServerReplaceAction,
+  isVersionAtLeast,
+  MIN_VALE_FILTER_VERSION,
+  parseValeVersion,
   resolveConfigPath,
   resolveValeExecutionSettings,
   resolveWindowsDockerProxyArch,
@@ -426,6 +429,45 @@ describe("isServerReplaceAction", () => {
       isServerReplaceAction({ Action: { Name: "replace", Params: ["x"] } }),
       true
     );
+  });
+});
+
+describe("parseValeVersion", () => {
+  test("parses the standard 'vale version X.Y.Z' output", () => {
+    assert.deepEqual(parseValeVersion("vale version 3.18.0"), [3, 18, 0]);
+  });
+
+  test("parses a bare version string", () => {
+    assert.deepEqual(parseValeVersion("3.9.4"), [3, 9, 4]);
+  });
+
+  test("tolerates trailing whitespace/newlines", () => {
+    assert.deepEqual(parseValeVersion("vale version 3.10.0\n"), [3, 10, 0]);
+  });
+
+  test("returns null for unparseable output", () => {
+    assert.equal(parseValeVersion(""), null);
+    assert.equal(parseValeVersion("command not found"), null);
+  });
+});
+
+describe("isVersionAtLeast", () => {
+  test("is true for an exact match", () => {
+    assert.equal(isVersionAtLeast([3, 10, 0], MIN_VALE_FILTER_VERSION), true);
+  });
+
+  test("is true for a newer major/minor/patch", () => {
+    assert.equal(isVersionAtLeast([3, 18, 0], MIN_VALE_FILTER_VERSION), true);
+    assert.equal(isVersionAtLeast([4, 0, 0], MIN_VALE_FILTER_VERSION), true);
+    assert.equal(isVersionAtLeast([3, 10, 1], MIN_VALE_FILTER_VERSION), true);
+  });
+
+  test("is false for an older minor version, regardless of patch", () => {
+    assert.equal(isVersionAtLeast([3, 9, 99], MIN_VALE_FILTER_VERSION), false);
+  });
+
+  test("is false for an older major version", () => {
+    assert.equal(isVersionAtLeast([2, 99, 99], MIN_VALE_FILTER_VERSION), false);
   });
 });
 

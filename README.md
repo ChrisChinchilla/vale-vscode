@@ -18,11 +18,14 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 
 ## Installation
 
-1. Install [Vale](https://vale.sh/docs/vale-cli/installation/);
+1. Install [Vale](https://vale.sh/docs/vale-cli/installation/) - **3.10.0 or later** (see note below);
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode);
 3. Restart VS Code (recommended).
 
-On first launch the extension downloads the [Vale Language Server](https://github.com/errata-ai/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). If you're upgrading from an older version of this extension, expect a one-time re-download the first time you activate it after upgrading.
+> [!NOTE]
+> Vale versions before 3.10.0 don't support the raw filter expressions this extension sends for `vale.valeCLI.minAlertLevel`/`vale.enableSpellcheck`, and fail every lint with `filter '...' not found` - with default settings, this happens even if you never touch either setting, since `vale.enableSpellcheck` defaults to `false`. If your Vale CLI predates 3.10.0, the extension shows a warning identifying this on startup.
+
+On first launch the extension downloads the [Vale Language Server](https://github.com/vale-cli/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory (rather than inside the extension's own install folder). The installed version is recorded alongside the binary, so upgrading the bundled server version triggers a verified replacement automatically.
 
 ## Features
 
