@@ -1,3 +1,4 @@
+import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
 
 import { createValeOutputChannel } from "./ui";
@@ -17,7 +18,16 @@ import { registerCodeActions } from "./codeActions";
  * contains no logic of its own.
  */
 export async function activate(context: ExtensionContext): Promise<void> {
-  createValeOutputChannel(context);
+  const output = createValeOutputChannel(context);
+  const report = process.report?.getReport();
+  const glibc =
+    report && typeof report !== "string"
+      ? (report as { header?: { glibcVersionRuntime?: string } }).header
+          ?.glibcVersionRuntime ?? "not detected"
+      : "not detected";
+  output.appendLine(
+    `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; glibc: ${glibc}; trusted: ${vscode.workspace.isTrusted}`
+  );
 
   // Prevent multiple activations - stop existing clients if present
   if (hasActiveClients()) {
@@ -25,15 +35,33 @@ export async function activate(context: ExtensionContext): Promise<void> {
     await stopAllClients();
   }
 
-  const serverPath = await ensureLanguageServerBinary(context);
+  let watchersRegistered = false;
+  const startLanguageServer = async () => {
+    const serverPath = await ensureLanguageServerBinary(context);
+    await startClientsForCurrentWorkspace(serverPath, context);
+    if (!watchersRegistered) {
+      registerWorkspaceFolderWatcher(context, serverPath);
+      registerConfigurationWatcher(context, serverPath);
+      watchersRegistered = true;
+    }
+  };
+
+  registerCommands(context, startLanguageServer);
+  registerCodeActions(context);
 
   console.log("Starting language server(s)");
-  await startClientsForCurrentWorkspace(serverPath, context);
-  registerWorkspaceFolderWatcher(context, serverPath);
-  registerConfigurationWatcher(context, serverPath);
-
-  registerCommands(context);
-  registerCodeActions(context);
+  try {
+    await startLanguageServer();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    output.appendLine(`[diagnostics] Activation failed: ${detail}`);
+    output.show(true);
+    vscode.window.showErrorMessage(`Vale: ${detail}`, "Show Diagnostics").then(
+      (choice) => {
+        if (choice === "Show Diagnostics") output.show(true);
+      }
+    );
+  }
 
   // Note: we don't run `vale sync` here even when `vale.valeCLI.syncOnStartup`
   // is enabled - that setting is passed to vale-ls via `initializationOptions`

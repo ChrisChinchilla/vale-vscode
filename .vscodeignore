@@ -2,11 +2,15 @@
 .vscode-test/**
 out/**
 out-test/**
+out-integration/**
+test/**
+.devcontainer/**
 src/**
 .gitignore
 vsc-extension-quickstart.md
 **/tsconfig.json
 **/tsconfig.test.json
+**/tsconfig.integration.json
 **/*.map
 **/*.ts
 native/vale-docker-proxy/*.go

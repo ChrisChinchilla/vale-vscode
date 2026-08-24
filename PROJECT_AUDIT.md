@@ -12,11 +12,21 @@
 
 - [ ] **Resolve remaining dependency findings.** Full `npm audit` reports 10 findings: 3 high, 3 moderate, and 4 low. Most additional findings are build/test-only dependencies, especially TSLint, the obsolete `vscode-test`, Mocha, and Webpack’s minifier chain.
 
-- [ ] **Declare and enforce Workspace Trust behavior.** VS Code currently disables undeclared extensions by default in Restricted Mode, but this should be deliberate and enforced inside commands too. Add `capabilities.untrustedWorkspaces`, restrict executable-related settings, hide unsafe commands when untrusted, and guard the handlers. [VS Code Workspace Trust guide](https://code.visualstudio.com/api/extension-guides/workspace-trust)
+- [x] **Declare and enforce Workspace Trust behavior.** This addresses one possible silent-failure mode related to [issue #54](https://github.com/ChrisChinchilla/vale-vscode/issues/54), but is not established as that devcontainer issue's root cause. `package.json` now declares `capabilities.untrustedWorkspaces: { supported: "limited", restrictedConfigurations: [...] }` covering `vale.valeCLI.path`/`config`/`syncOnStartup` and `vale.docker.*`; the Sync/Show Configuration/Show Metrics/vocabulary-add commands are guarded with `requireTrustedWorkspace()` (`src/commands.ts`) and hidden from menus/the tree view when untrusted (`src/ui.ts`). When trust is granted, VS Code emits the configuration-change event that restarts affected clients with the newly available workspace settings. See `.claude/notes/workspace-trust.md` and `.claude/notes/devcontainer-issue-54.md`.
 
 - [ ] **Harden GitHub Actions.** GitHub Actions use mutable tags, including third-party publishing actions that receive marketplace secrets. Pin every action to a full commit SHA and add least-privilege permissions. GitHub identifies full SHAs as the only immutable way to reference actions. [GitHub Actions security guidance](https://docs.github.com/en/actions/reference/security/secure-use)
 
 ### Functional defects
+
+- [x] **Restore the intended vale-ls v0.5.0 upgrade.** Restored `LSP_TAG` and all six official release-API SHA-256 digests to v0.5.0, where `valeBinaryPath` is supported. The installer records `.vale-ls-version` and replaces missing, unversioned, or older installs, fixing the merge regression that could make both `vale.valeCLI.path` and Docker mode ineffective. See `.claude/notes/devcontainer-issue-54.md`.
+
+- [ ] **Complete the packaged-VSIX devcontainer release test for issue #54.** Added `.devcontainer/issue-54`, with glibc Ubuntu, Vale outside normal `PATH`, an explicit config, and a known diagnostic fixture. Added a CI extension-host smoke test for workspace placement and trust-sensitive manifest declarations. VS Code automatically trusts extension-development windows, so an actual Restricted Mode runtime pass and end-to-end remote diagnostic assertion still require installing the packaged VSIX in a normal devcontainer window; retain this as a release check until that can be automated without weakening the test.
+
+- [x] **Handle unsupported Linux libc explicitly.** Alpine/musl is detected before download and receives an actionable glibc-only error. Pure unit coverage verifies Linux glibc, Linux without glibc, and non-Linux behavior.
+
+- [x] **Make remote startup diagnosable.** The Vale output channel logs extension-host location, platform/libc, trust, workspace/config paths, selected Vale execution mode/path, vale-ls version/path, installation failures, and client startup errors. **Vale: Show Diagnostics** and **Vale: Restart Language Server** remain available even when initial server installation/activation fails.
+
+- [x] **Declare remote placement.** Added `"extensionKind": ["workspace"]`; the extension-host smoke test asserts the manifest so VS Code installs/runs Vale beside remote workspace files and executables. The packaged-VSIX devcontainer runtime check remains part of the open release-test item above.
 
 - [x] **Fix Windows startup.** The code discovers `vale-ls.exe`, then constructs server options using `vale-ls` without `.exe`. See [`src/lsp.ts:353`](src/lsp.ts#L353). Fixed as a side effect of the vale-ls download hardening work: `filePath` is now built once via `getExecutableName(process.platform)` (src/utils.ts) and reused for both the existence check and the language client's `serverOptions`.
 
@@ -72,13 +82,16 @@ The current settings appear lexicographically because they have no explicit orde
 
 - [ ] Replace `null` string defaults with valid empty-string defaults.
 - [ ] Add explicit order, concise Markdown descriptions, links, integer bounds, and readable enum labels.
-- [ ] Add native commands for **Select Configuration File**, **Open Vale Settings**, and **Restart Language Server**.
+- [ ] Add native commands for **Select Configuration File** and **Open Vale Settings**. **Restart Language Server** is now implemented.
 - [ ] Deprecate or implement the three no-op settings instead of silently presenting them.
 - [ ] Remove the Explorer tree containing three command buttons. VS Code’s UX guidance explicitly discourages using tree items as command buttons. Keep the commands in the Command Palette and expose only contextual actions where useful. [VS Code View guidelines](https://code.visualstudio.com/api/ux-guidelines/views)
 - [ ] Add one `LanguageStatusItem` showing Starting, Ready, or Configuration Error for relevant documents. VS Code identifies this as the preferred surface for active linter/configuration status. [VS Code API](https://code.visualstudio.com/api/references/vscode-api#LanguageStatusItem)
 - [ ] Put vocabulary actions beneath a single **Vale** editor-context submenu.
 - [ ] Use cancellable progress for downloads and sync; reserve notifications for actionable failure states.
 - [ ] Format configuration as JSON in an editor document rather than raw output-channel text.
+- [x] Hide trust-gated commands from the Command Palette with `menus.commandPalette` `when` clauses as well as guarding their handlers.
+- [x] Make `ValeCommandsProvider` disposable and dispose its `EventEmitter` with the extension context.
+- [x] Compare the Workspace Trust warning result to the exact `"Manage Workspace Trust"` action rather than treating every future truthy action as approval.
 
 ## Efficiency and code structure
 
@@ -89,11 +102,13 @@ The current settings appear lexicographically because they have no explicit orde
 - [ ] Implement the diagnostic limit through client middleware so the exposed setting actually works.
 - [ ] Use a single safe CLI runner with no shell, bounded output, timeout, cancellation, process disposal, and concurrency control.
 - [ ] Route sync through the language server so it uses the same managed Vale installation and configuration.
-- [ ] Cache the verified language server by version in global storage. The local binary is currently `0.3.8`, while the code requests `0.4.0`; there is no version verification or update path.
+- [x] Cache the verified language server by version in global storage. `.vale-ls-version` is checked against `LSP_TAG`; mismatched and legacy unversioned installs are replaced with the checksum-verified current binary.
 - [ ] Resolve commands relative to the active document’s workspace folder, prompting only when the choice is ambiguous.
 - [ ] Raise the TypeScript target from ES2017 to a modern Node target and remove unnecessary casts and boxed `String` types.
 
 ## Dependency and CI proposal
+
+- [ ] Add a packaged-VSIX untrusted extension-host integration run. A trusted extension-development host run is now in CI and verifies remote placement plus every restricted configuration; VS Code forces extension-development windows trusted, so the actual untrusted runtime path remains in the manual devcontainer release matrix.
 
 - [x] Upgrade `vscode-languageclient` from 9.0.1 to 10.1.0. Already done (landed as part of an earlier "remove the runtime dependency advisory" fix); this item was stale.
 - [x] Replace `vscode-test` with `@vscode/test-electron@3.1.0`. Investigated: `vscode-test` was unused anywhere in scripts or source (no integration test suite exists), so it was removed outright rather than swapped — nothing currently exercises it, and adding `@vscode/test-electron` with no test suite to run would just be a second unused dependency. Revisit if/when an actual extension-host integration test suite is added.
@@ -122,4 +137,3 @@ The current settings appear lexicographically because they have no explicit orde
 2. Settings and UI restructuring.
 3. Architectural and runtime-efficiency refactor.
 4. Dependency/toolchain/CI modernization, tests, documentation, and cross-platform packaging validation.
-

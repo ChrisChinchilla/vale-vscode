@@ -30,6 +30,23 @@
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Linting still works, but settings that control which executable runs or trigger automatic synchronization (the Vale binary path, config, sync-on-startup, and Docker image/args) are locked to your user-level configuration, and commands that explicitly run a process (Sync, Show Configuration, Show Readability Metrics, vocabulary add) are disabled until the workspace is trusted.",
+      "restrictedConfigurations": [
+        "vale.valeCLI.path",
+        "vale.valeCLI.config",
+        "vale.valeCLI.syncOnStartup",
+        "vale.docker.enabled",
+        "vale.docker.image",
+        "vale.docker.extraArgs"
+      ]
+    }
+  },
   "contributes": {
     "commands": [
       {
@@ -41,6 +58,16 @@
         "command": "vale.install",
         "title": "Vale: Install or Update Vale",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "vale.restartLanguageServer",
+        "title": "Vale: Restart Language Server",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "vale.showDiagnostics",
+        "title": "Vale: Show Diagnostics",
+        "icon": "$(output)"
       },
       {
         "command": "vale.addToAcceptList",
@@ -212,10 +239,32 @@
       }
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "vale.sync",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "vale.showConfig",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "vale.showMetrics",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "vale.addToAcceptList",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "vale.addToRejectList",
+          "when": "isWorkspaceTrusted"
+        }
+      ],
       "view/title": [
         {
           "command": "vale.sync",
-          "when": "view == valeCommands",
+          "when": "view == valeCommands && isWorkspaceTrusted",
           "group": "navigation"
         }
       ],
@@ -223,12 +272,12 @@
         {
           "command": "vale.addToAcceptList",
           "group": "vale@1",
-          "when": "editorHasSelection"
+          "when": "editorHasSelection && isWorkspaceTrusted"
         },
         {
           "command": "vale.addToRejectList",
           "group": "vale@2",
-          "when": "editorHasSelection"
+          "when": "editorHasSelection && isWorkspaceTrusted"
         }
       ]
     }
@@ -239,6 +288,8 @@
     "watch": "tsc -watch -p ./",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "npm run pretest && node --test out-test/*.test.js",
+    "test:integration:compile": "tsc -p tsconfig.integration.json",
+    "test:integration": "npm run test:integration:compile && node out-integration/runTest.js",
     "webpack": "webpack --mode production",
     "webpack-dev": "webpack --mode development --watch",
     "test-compile": "tsc -p ./",
@@ -252,6 +303,7 @@
     "@types/vscode": "^1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "eslint": "^10.0.2",
     "ts-loader": "^9.5.4",

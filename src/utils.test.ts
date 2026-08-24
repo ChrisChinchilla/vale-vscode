@@ -14,6 +14,7 @@ import {
   getExecutableName,
   getExpectedChecksum,
   getSubstitutionReplacements,
+  isUnsupportedLinuxLibc,
   isServerReplaceAction,
   isVersionAtLeast,
   MIN_VALE_FILTER_VERSION,
@@ -25,6 +26,17 @@ import {
   shellQuoteSingle,
   verifyChecksum,
 } from "./utils";
+
+describe("isUnsupportedLinuxLibc", () => {
+  test("rejects Linux runtimes without glibc", () => {
+    assert.equal(isUnsupportedLinuxLibc("linux", undefined), true);
+  });
+
+  test("accepts glibc Linux and non-Linux runtimes", () => {
+    assert.equal(isUnsupportedLinuxLibc("linux", "2.36"), false);
+    assert.equal(isUnsupportedLinuxLibc("darwin", undefined), false);
+  });
+});
 
 describe("detectArch", () => {
   test("maps x64 to x86_64", () => {

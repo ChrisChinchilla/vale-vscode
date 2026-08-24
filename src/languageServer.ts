@@ -18,6 +18,7 @@ import {
   parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
+  isUnsupportedLinuxLibc,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { buildValeConfig, resolveValeExecutionOptions } from "./config";
@@ -46,6 +47,18 @@ import {
  * `.claude/notes/multi-root-workspaces.md`.
  */
 const clients: Map<string, LanguageClient> = new Map();
+const VERSION_MARKER_NAME = ".vale-ls-version";
+
+function runtimeGlibcVersion(): string | undefined {
+  const report = process.report?.getReport();
+  if (!report || typeof report === "string") return undefined;
+  return (report as { header?: { glibcVersionRuntime?: string } }).header
+    ?.glibcVersionRuntime;
+}
+
+function logDiagnostic(message: string): void {
+  getValeOutputChannel().appendLine(`[diagnostics] ${message}`);
+}
 
 /** Appends a timestamped-by-VS-Code line to the Vale output channel. */
 function logDiagnostic(message: string): void {
@@ -136,7 +149,7 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
     );
   }
 
-  const URL = `https://github.com/errata-ai/vale-ls/releases/download/${LSP_TAG}/${assetName}`;
+  const URL = `https://github.com/vale-cli/vale-ls/releases/download/${LSP_TAG}/${assetName}`;
   const installDir = getInstallDir(context);
   await mkdir(installDir, { recursive: true });
 
@@ -190,6 +203,11 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
     await fs.promises.writeFile(tmpPath, executableBuffer, { mode: 0o755 });
     await fs.promises.chmod(tmpPath, 0o755);
     await rename(tmpPath, finalPath);
+    await fs.promises.writeFile(
+      path.join(installDir, VERSION_MARKER_NAME),
+      `${LSP_TAG}\n`,
+      "utf8"
+    );
 
     vscode.window.showInformationMessage(
       "First launch: Vale Language Server downloaded"
@@ -197,7 +215,11 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
   } catch (error) {
     await rm(tmpPath, { force: true });
     console.error("Download failed:", error);
-    throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    logDiagnostic(`vale-ls installation failed: ${detail}`);
+    throw new Error(
+      `Unable to install Vale Language Server ${LSP_TAG}. Check this remote environment's access to github.com, then run "Vale: Restart Language Server". ${detail}`
+    );
   }
 }
 
@@ -208,14 +230,28 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
 export async function ensureLanguageServerBinary(
   context: ExtensionContext
 ): Promise<string> {
+  const glibcVersion = runtimeGlibcVersion();
+  if (isUnsupportedLinuxLibc(process.platform, glibcVersion)) {
+    throw new Error(
+      "Vale Language Server publishes glibc Linux binaries only, but this environment appears to use musl libc (common in Alpine containers). Use a glibc-based devcontainer image."
+    );
+  }
+
   const installDir = getInstallDir(context);
   const filePath = path.join(installDir, getExecutableName(process.platform));
+  const versionPath = path.join(installDir, VERSION_MARKER_NAME);
 
   try {
     await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-    console.log("Language server exists");
+    const installedVersion = (
+      await vscode.workspace.fs.readFile(vscode.Uri.file(versionPath))
+    ).toString().trim();
+    if (installedVersion !== LSP_TAG) {
+      throw new Error(`Installed version is ${installedVersion || "unknown"}`);
+    }
+    logDiagnostic(`Using Vale Language Server ${LSP_TAG} at ${filePath}`);
   } catch {
-    console.log("Language server not found, downloading...");
+    logDiagnostic(`Installing Vale Language Server ${LSP_TAG} in ${installDir}`);
     await downloadLSP(context);
 
     // Verify download succeeded
@@ -372,6 +408,10 @@ export async function startClientForFolder(
     await client.start();
   } catch (err) {
     console.error(err);
+    logDiagnostic(
+      `Failed to start Vale Language Server${folder ? ` for ${folder.uri.toString()}` : ""}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`
+    );
+    getValeOutputChannel().show(true);
     vscode.window.showErrorMessage(
       folder
         ? `Failed to start Vale Language Server for workspace folder "${folder.name}"`

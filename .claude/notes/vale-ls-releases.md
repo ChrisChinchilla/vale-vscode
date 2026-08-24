@@ -1,6 +1,6 @@
 # vale-ls release pinning and checksums
 
-`src/utils.ts` hardcodes `LSP_TAG` (currently `v0.4.0`) and a
+`src/utils.ts` hardcodes `LSP_TAG` (currently `v0.5.0`) and an
 `EXPECTED_CHECKSUMS` map of SHA-256 digests, one per platform/arch release
 asset. `downloadLSP` in `src/lsp.ts` refuses to install a binary whose
 downloaded bytes don't match the recorded digest for its filename — this is
@@ -10,14 +10,11 @@ extension's own install directory).
 
 ## Why hardcoded checksums instead of an upstream checksums file
 
-`errata-ai/vale-ls` releases do not currently publish a `SHA256SUMS` (or
-similar) file alongside the platform zips — checked via
-`gh api repos/errata-ai/vale-ls/releases/tags/v0.4.0`, which only lists the
-six per-platform `.zip` assets. Without an upstream-published, signed digest
-to pin against, the digests are computed once (by downloading each asset
-directly from the GitHub release and hashing it) and embedded in source, so
-a compromised or corrupted download can be detected and rejected before
-extraction.
+`vale-cli/vale-ls` releases do not currently publish a `SHA256SUMS` file, but
+GitHub's release API publishes a SHA-256 digest for each asset. The v0.5.0
+values were taken from
+`gh api repos/vale-cli/vale-ls/releases/tags/v0.5.0` and embedded in source,
+so a compromised or corrupted download is rejected before extraction.
 
 ## Bumping `LSP_TAG`
 
@@ -33,7 +30,7 @@ for f in vale-ls-aarch64-apple-darwin.zip \
          vale-ls-x86_64-apple-darwin.zip \
          vale-ls-x86_64-pc-windows-gnu.zip \
          vale-ls-x86_64-unknown-linux-gnu.zip; do
-  curl -sL -o "$f" "https://github.com/errata-ai/vale-ls/releases/download/$TAG/$f"
+  curl -sL -o "$f" "https://github.com/vale-cli/vale-ls/releases/download/$TAG/$f"
 done
 shasum -a 256 *.zip
 ```
@@ -42,6 +39,8 @@ Update `LSP_TAG` and every entry in `EXPECTED_CHECKSUMS` in `src/utils.ts`
 together, in the same commit. `src/utils.test.ts`'s
 `buildDownloadAssetName` suite asserts every producible platform/arch
 combination has a matching checksum entry — it will fail if one is missed.
+The installer also writes `.vale-ls-version` beside the binary and replaces
+the binary whenever that marker differs from `LSP_TAG`.
 
 ## Install location
 
