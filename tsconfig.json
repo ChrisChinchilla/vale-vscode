@@ -2,7 +2,7 @@
 
 	"compilerOptions": {
 		"module": "es2022",
-		"moduleResolution": "node",
+		"moduleResolution": "bundler",
 		"target": "es2017",
 		"esModuleInterop": true,
 		"outDir": "out",
@@ -11,10 +11,12 @@
 		],
 		"sourceMap": true,
 		"rootDir": "src",
-		"strict": true
+		"strict": true,
+		"skipLibCheck": true
 	},
 	"exclude": [
 		"node_modules",
-		".vscode-test"
+		".vscode-test",
+		"test"
 	]
 }

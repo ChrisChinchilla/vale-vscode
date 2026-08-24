@@ -23,6 +23,12 @@ const config = {
   devtool: false,
   externals: {
     vscode: "commonjs vscode", // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
+    // unzipper's Open/index.js has a lazy `require("@aws-sdk/client-s3")`
+    // inside its S3 support path (`s3_v3`), which we never call (we only
+    // use `unzipper.Open.buffer`). Marking it external instead of installing
+    // the AWS SDK avoids bundling ~dozens of MB of unused code for a
+    // require() that never actually runs.
+    "@aws-sdk/client-s3": "commonjs @aws-sdk/client-s3",
   },
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
