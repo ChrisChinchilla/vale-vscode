@@ -410,3 +410,56 @@ export function resolveConfigPath(
 
   return resolvedConfigPath;
 }
+
+/**
+ * A reference-counted registry of shared registrations.
+ *
+ * Every workspace folder's vale-ls advertises the same command names, and a
+ * name can only be registered with VS Code once - so the first owner
+ * registers it, later owners share it, and the registration is disposed when
+ * the last owner releases it. Pure bookkeeping, so the routing in
+ * `languageServer.ts` stays testable.
+ */
+export class SharedRegistry<T> {
+  private entries = new Map<string, { value: T; refs: number }>();
+  private owned = new Map<unknown, string[]>();
+
+  constructor(
+    private create: (name: string) => T,
+    private destroy: (value: T) => void
+  ) {}
+
+  /** Registers `names` for `owner`, creating each name's value on first use. */
+  acquire(owner: unknown, names: string[]): void {
+    this.owned.set(owner, names);
+    for (const name of names) {
+      const existing = this.entries.get(name);
+      if (existing) {
+        existing.refs += 1;
+        continue;
+      }
+      this.entries.set(name, { value: this.create(name), refs: 1 });
+    }
+  }
+
+  /** Releases `owner`'s names, destroying any it held the last claim on. */
+  release(owner: unknown): void {
+    const names = this.owned.get(owner) ?? [];
+    this.owned.delete(owner);
+    for (const name of names) {
+      const entry = this.entries.get(name);
+      if (!entry) {
+        continue;
+      }
+      entry.refs -= 1;
+      if (entry.refs <= 0) {
+        this.destroy(entry.value);
+        this.entries.delete(name);
+      }
+    }
+  }
+
+  has(name: string): boolean {
+    return this.entries.has(name);
+  }
+}

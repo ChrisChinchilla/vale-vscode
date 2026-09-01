@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import {
   EXPECTED_CHECKSUMS,
+  SharedRegistry,
   buildDockerRunArgs,
   buildDockerWrapperScript,
   buildDownloadAssetName,
@@ -518,4 +519,59 @@ describe("buildDockerWrapperScript", () => {
     assert.ok(script.includes(`'/path with spaces/root:/path with spaces/root'`));
   });
 
+});
+
+describe("SharedRegistry", () => {
+  // Regression coverage for the multi-root startup failure: every folder's
+  // vale-ls advertises the same command names (`cli.sync`, ...), and
+  // registering a name twice with VS Code throws, killing the second
+  // folder's client. The registry gives each name one registration shared
+  // by every client, disposed only when the last client releases it.
+  test("creates each name once across owners", () => {
+    const created: string[] = [];
+    const registry = new SharedRegistry<string>(
+      (name) => {
+        created.push(name);
+        return name;
+      },
+      () => {}
+    );
+
+    registry.acquire("vale", ["cli.sync", "cli.compile"]);
+    registry.acquire("harper", ["cli.sync", "cli.compile"]);
+
+    assert.deepEqual(created, ["cli.sync", "cli.compile"]);
+    assert.ok(registry.has("cli.sync"));
+  });
+
+  test("disposes a name only when its last owner releases it", () => {
+    const destroyed: string[] = [];
+    const registry = new SharedRegistry<string>(
+      (name) => name,
+      (value) => destroyed.push(value)
+    );
+
+    registry.acquire("vale", ["cli.sync"]);
+    registry.acquire("harper", ["cli.sync"]);
+
+    registry.release("vale");
+    assert.deepEqual(destroyed, []);
+    assert.ok(registry.has("cli.sync"));
+
+    registry.release("harper");
+    assert.deepEqual(destroyed, ["cli.sync"]);
+    assert.equal(registry.has("cli.sync"), false);
+  });
+
+  test("tolerates releasing an unknown owner", () => {
+    const registry = new SharedRegistry<string>(
+      (name) => name,
+      () => {}
+    );
+    registry.release("never-acquired");
+    registry.acquire("vale", ["cli.sync"]);
+    registry.release("vale");
+    registry.release("vale");
+    assert.equal(registry.has("cli.sync"), false);
+  });
 });

@@ -19,6 +19,7 @@ import {
   sha256Hex,
   buildDockerProxyEnvironment,
   isUnsupportedLinuxLibc,
+  SharedRegistry,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { buildValeConfig, resolveValeExecutionOptions } from "./config";
@@ -32,6 +33,7 @@ import { getValeOutputChannel } from "./ui";
 import { getValeVersionOutput } from "./cli";
 
 import {
+  ExecuteCommandRequest,
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
@@ -40,14 +42,70 @@ import {
 /**
  * Downloading, installing, and running vale-ls.
  *
- * vale-ls does not support the `workspace/workspaceFolders` capability, so
- * (per VS Code's standard guidance for such servers) we run one client per
- * workspace folder, each restricted to that folder's files, rather than a
- * single client shared across the whole window. See
- * `.claude/notes/multi-root-workspaces.md`.
+ * One client runs per workspace folder, each restricted to that folder's
+ * files. vale-ls v0.5.0+ supports `workspace/workspaceFolders` itself, so a
+ * single shared client is possible -- but per-client `initializationOptions`
+ * are what let folder-scoped settings (a per-folder `vale.valeCLI.config`)
+ * take effect, so collapsing to one client trades that away.
  */
 const clients: Map<string, LanguageClient> = new Map();
 const VERSION_MARKER_NAME = ".vale-ls-version";
+
+/**
+ * vale-ls advertises its commands (`cli.sync`, ...) through the
+ * `executeCommandProvider` capability, and vscode-languageclient registers
+ * each one with VS Code. Every folder's server advertises the same names, so
+ * the second client's registration throws (`command 'cli.sync' already
+ * exists`) and that folder's client dies on startup.
+ *
+ * So that registration is disabled per client, and each command is instead
+ * registered once here, with a handler that routes to the client for the
+ * active editor's folder - which the per-client registration never did.
+ */
+const sharedServerCommands = new SharedRegistry<vscode.Disposable>(
+  (command) =>
+    vscode.commands.registerCommand(command, (...args: unknown[]) => {
+      return clientForActiveEditor()?.sendRequest(ExecuteCommandRequest.type, {
+        command,
+        arguments: args,
+      });
+    }),
+  (disposable) => disposable.dispose()
+);
+
+/** The client responsible for the active editor's folder. */
+function clientForActiveEditor(): LanguageClient | undefined {
+  const uri = vscode.window.activeTextEditor?.document.uri;
+  if (uri) {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (folder) {
+      const scoped = clients.get(clientKeyFor(folder));
+      if (scoped) {
+        return scoped;
+      }
+    }
+  }
+  return clients.get(noFolderClientKey()) ?? clients.values().next().value;
+}
+
+/** Keeps the client from registering the server's commands itself. */
+function suppressCommandRegistration(client: LanguageClient): void {
+  const feature = client.getFeature(ExecuteCommandRequest.method);
+  (feature as unknown as { initialize: () => void }).initialize = () => {};
+}
+
+/** Registers the started client's advertised commands, once per name. */
+function shareServerCommands(client: LanguageClient): void {
+  const commands =
+    client.initializeResult?.capabilities.executeCommandProvider?.commands ??
+    [];
+  sharedServerCommands.acquire(client, commands);
+}
+
+/** Lets go of a stopping client's commands, disposing the last reference. */
+function releaseServerCommands(client: LanguageClient): void {
+  sharedServerCommands.release(client);
+}
 
 function runtimeGlibcVersion(): string | undefined {
   const report = process.report?.getReport();
@@ -277,6 +335,7 @@ export async function stopAndRemoveClient(key: string): Promise<void> {
     return;
   }
   clients.delete(key);
+  releaseServerCommands(existing);
   try {
     await existing.stop();
   } catch (error) {
@@ -398,10 +457,12 @@ export async function startClientForFolder(
   const clientName = folder ? `Vale VSCode (${folder.name})` : "Vale VSCode";
 
   const client = new LanguageClient(clientId, clientName, serverOptions, clientOptions);
+  suppressCommandRegistration(client);
   clients.set(key, client);
 
   try {
     await client.start();
+    shareServerCommands(client);
   } catch (err) {
     console.error(err);
     logDiagnostic(
