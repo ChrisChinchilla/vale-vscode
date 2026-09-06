@@ -21,7 +21,7 @@
   "version": "1.1.1",
   "engines": {
     "vscode": "^1.109.0",
-    "node": ">=20 <=22.11"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "categories": [
     "Linters"
@@ -287,7 +287,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "tsc -p tsconfig.test.json",
-    "test": "npm run pretest && node --test out-test/*.test.js",
+    "test": "node --test out-test/*.test.js",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
     "test:integration": "npm run test:integration:compile && node out-integration/runTest.js",
     "webpack": "webpack --mode production",
@@ -298,16 +298,16 @@
     "validate": "npm run compile && npm run lint && npm test && npm run webpack"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
+    "@types/node": "^22.13.0",
     "@types/unzipper": "^0.10.11",
-    "@types/vscode": "^1.136.0",
+    "@types/vscode": "1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.69.0",
     "@typescript-eslint/parser": "^8.69.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "eslint": "^10.10.0",
     "ts-loader": "^9.6.2",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
     "unzipper": "~0.12.5",
     "webpack": "^5.110.3",
     "webpack-cli": "^7.2.3"

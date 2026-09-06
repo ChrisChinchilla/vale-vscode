@@ -1,3 +1,14 @@
+# Development setup
+
+Use Node.js 22.13 or newer on the 22.x line, or Node.js 24 or newer.
+With nvm, run `nvm install` and `nvm use` to select the Node 22 version
+used by CI, then run `npm ci` and `npm run validate`.
+Run `npm run package` to verify extension packaging.
+
+Keep `@types/node` on the Node 22 line and `@types/vscode` pinned to the
+minimum version in `engines.vscode`, so compilation checks the supported
+runtime APIs. TypeScript stays on 5.x for the compiler API used by ts-loader.
+
 # Publishing a release
 
 ## Versioning: stable vs. pre-release
