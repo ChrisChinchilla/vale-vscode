@@ -2,7 +2,7 @@
 
 [![Publish Extension on tag](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishTags.yml) [![Publish Pre-Release Extension](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishPreRelease.yml/badge.svg)](https://github.com/ChrisChinchilla/vale-vscode/actions/workflows/publishPreRelease.yml)
 
-> The Visual Studio Code extension for [Vale](https://github.com/errata-ai/vale).
+> The Visual Studio Code extension for [Vale](https://vale.sh).
 
 The Vale extension for Visual Studio Code and editors based on Visual Studio Code such as Cursor provides customizable spelling, style, and grammar checking for a variety of markup formats (Markdown, AsciiDoc, reStructuredText, HTML, and DITA). The extension uses the [Vale Language Server](https://github.com/vale-cli/vale-ls) which allows for tighter integration with Vale features.
 
@@ -18,6 +18,13 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 1. Install [Vale](https://vale.sh/docs/vale-cli/installation/) - **3.10.0 or later** (see note below) or use the extension's options to install Vale automatically.
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode).
 3. Restart VS Code (recommended).
+
+### Pre-release versions
+
+The Marketplace receives pre-release builds ahead of stable releases. To opt in,
+open the extension's Marketplace page in VS Code and choose **Switch to
+Pre-Release Version**. Switch back at any time with **Switch to Release
+Version**.
 
 > [!WARNING]
 > Vale versions before 3.10.0 don't support the raw filter expressions this extension sends for setting alert levels or toggling spell check, and fail every lint with `filter '...' not found`. This happens even if you never touch either setting, since spell checking defaults to `false`. If your Vale CLI version predates 3.10.0, the extension shows a warning identifying this on startup.
@@ -66,6 +73,9 @@ The following commands are available from the **Vale** panel in the Explorer sid
 - **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages.
 - **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
+- **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
+- **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures.
+- **Vale: Add to Accept List** / **Vale: Add to Reject List** add the selected (or right-clicked) word to your vocabulary's `accept.txt` or `reject.txt`. They need `vale.vocabPath` set. Also available as quick fixes on spelling alerts.
 
 ### Multi-root workspaces
 
@@ -112,13 +122,13 @@ Use **Vale: Show Diagnostics** to see the extension-host location, platform/libc
 
 If no problems appear, work through these checks:
 
-1. **Save the file.** Linting runs on save by default. Enable `vale.valeCLI.lintOnChange` to lint as you type; new files still need to be saved to disk first.
+1. **Save the file.** Linting runs on save by default. Enable `vale.valeCLI.lintOnChange` to lint as you type. You still need to save new files first.
 2. **Check the active configuration.** Run **Vale: Show Configuration** from the command palette. Confirm that Vale finds your `.vale.ini` and that it enables styles for the file's extension. Set `vale.valeCLI.config` if you need to select a specific configuration.
 3. **Sync packages.** If your `.vale.ini` declares packages, run **Vale: Sync** to download them. These commands require a trusted workspace.
 4. **Check diagnostic settings.** Make sure `vale.valeCLI.minAlertLevel` does not hide the alerts you expect. For spelling alerts, enable `vale.enableSpellcheck` and a spelling style in your Vale configuration.
 5. **Try Vale directly.** For a local Vale installation, run `vale --version` and `vale path/to/your-file.md` from the workspace folder, using the same executable and configuration as the extension. In a remote workspace, run these commands inside that environment. If the CLI also fails, resolve its installation or configuration error first.
 
-If Vale cannot start, or the CLI works but the extension does not, run **Vale: Show Diagnostics** to inspect the executable mode, paths, and startup errors. If the executable cannot be found, set `vale.valeCLI.path` to its absolute path in the extension host's environment. After fixing the issue, run **Vale: Restart Language Server** to retry installation if needed and restart the clients.
+If Vale cannot start, or the CLI works but the extension does not, run **Vale: Show Diagnostics** to inspect the executable mode, paths, and startup errors. If the extension cannot find the executable, set `vale.valeCLI.path` to its absolute path in the extension host's environment. After fixing the issue, run **Vale: Restart Language Server** to retry installation if needed and restart the clients.
 
 If the problem persists, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues) with your editor and extension versions, Vale version, operating system, whether you use Docker or a remote workspace, relevant diagnostic output, and a minimal configuration and sample file that reproduce it. Remove sensitive paths or content before sharing.
 
@@ -132,6 +142,7 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): Toggle display of warning dialog that you must save a file before Vale lints it.
 - `vale.readabilityProblemLocation` (default: `status`): If you have any `Readability` or `metric` styles, the extension can display the readability score in the status bar, the problems view, or both.
 - `vale.enableSpellcheck` (default: `true`): Enable in-built spell checking for any `Spelling` styles.
+- `vale.vocabPath` (default: `null`): Name of the Vale vocabulary the **Add to Accept List** / **Add to Reject List** commands and quick fixes write to, resolved relative to `StylesPath` (e.g. `MyVocab` targets `<StylesPath>/config/vocabularies/MyVocab/`).
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
 - `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages. Ignored when `vale.docker.enabled` is true.
@@ -141,3 +152,25 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved.
 - `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled.
 - `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on).
+
+### Advanced and debugging settings
+
+- `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server in the output panel. Set to `messages` or `verbose` when reporting a bug.
+- `vale.maxNumberOfProblems` (default: `100`): Requested cap on the number of problems reported per file. Currently has no effect and is pending removal.
+
+## Changelog
+
+You can find the release notes on the [GitHub Releases page](https://github.com/ChrisChinchilla/vale-vscode/releases).
+
+## Contributing
+
+Issues and pull requests are welcome on the [GitHub repository](https://github.com/ChrisChinchilla/vale-vscode). To work on the extension locally:
+
+- `npm install` to install dependencies.
+- `npm run watch` for incremental type-checking, or `npm run webpack-dev` to bundle in watch mode.
+- Press <kbd>F5</kbd> in VS Code to launch an Extension Development Host.
+- `npm test` runs the unit tests. `npm run compile` type-checks the whole extension.
+
+## License
+
+[MIT](LICENSE) © Chris Chinchilla and Joseph Kato.
