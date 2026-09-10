@@ -1,0 +1,47 @@
+name: Claude issue triage
+
+# Runs whenever a new issue is opened and starts a Claude Code cloud session
+# (a "Routine" fire) at claude.ai/code that investigates the issue and
+# proposes an implementation plan. The routine's own prompt tells it not to
+# edit files, commit, or push - it's investigation only. Nothing lands in
+# this repo until a maintainer opens the resulting session on claude.ai/code,
+# reviews the plan, and drives implementation (and PR creation) themselves.
+#
+# Setup: this workflow POSTs to the "vale-vscode issue triage" routine's API
+# trigger. Configure that trigger once at https://claude.ai/code/routines
+# (open the routine -> Edit routine -> Select a trigger -> add "API" ->
+# Generate token), then add the generated token as the CLAUDE_ROUTINE_TOKEN
+# repo secret (Settings -> Secrets and variables -> Actions).
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  start-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire the vale-vscode issue triage routine
+        env:
+          CLAUDE_ROUTINE_TOKEN: ${{ secrets.CLAUDE_ROUTINE_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          payload=$(jq -n \
+            --arg number "$ISSUE_NUMBER" \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg body "$ISSUE_BODY" \
+            '{text: ("Issue #" + $number + ": " + $title + "\n" + $url + "\n\n" + $body)}')
+
+          curl -sS --fail-with-body -X POST \
+            "https://api.anthropic.com/v1/claude_code/routines/trig_01HgNEAHCsatG7JhQ7KSbkn7/fire" \
+            -H "Authorization: Bearer ${CLAUDE_ROUTINE_TOKEN}" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
