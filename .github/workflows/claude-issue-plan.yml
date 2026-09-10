@@ -1,0 +1,56 @@
+name: Claude issue triage
+
+# Runs automatically whenever a new issue is opened. Claude investigates and
+# posts an implementation plan as an issue comment, but this job's GitHub
+# token has read-only repo contents, and Claude itself is run in
+# `--permission-mode plan`, so it cannot write files, commit, or push -
+# nothing changes in the repo until a maintainer reviews the plan and kicks
+# off implementation (see claude-issue-implement.yml).
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: claude-issue-plan-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Investigate issue and propose a plan
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --permission-mode plan
+          prompt: |
+            A new issue was just opened in this repository:
+
+            Title: ${{ github.event.issue.title }}
+            Body:
+            ${{ github.event.issue.body }}
+
+            Investigate the codebase and work out how you would fix or
+            implement this issue. Do NOT write or edit any files, and do not
+            attempt to commit or push anything - you are running in
+            read-only planning mode, and this workflow's GitHub token has no
+            write access to repository contents.
+
+            Post your findings and a concrete, step-by-step implementation
+            plan as a comment on this issue so a maintainer can review it
+            before any code is written. If there are genuine open questions
+            that would change the approach, ask them in the comment instead
+            of guessing.
+
+            When a maintainer wants you to proceed, they will comment
+            `@claude implement this plan` (or similar) on the issue, which
+            triggers a separate workflow with write access.
