@@ -121,7 +121,7 @@
           "scope": "resource",
           "type": "string",
           "default": null,
-          "description": "Absolute or relative path to a Vale config file. If not specified, the default search process is used (relative to the current file)."
+          "description": "Absolute or relative path to a Vale config file. Supports ~, ${workspaceFolder}, ${userHome}, and ${env:VAR}. If not specified, the default search process is used (relative to the current file)."
         },
         "vale.valeCLI.syncOnStartup": {
           "scope": "resource",
@@ -145,7 +145,7 @@
           "scope": "resource",
           "type": "string",
           "default": null,
-          "markdownDescription": "Absolute path to the Vale binary to run, instead of the one the language server manages. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
+          "markdownDescription": "Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names use `PATH`. Workspace-relative executable paths are ignored in Restricted Mode. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
         },
         "vale.docker.enabled": {
           "scope": "resource",

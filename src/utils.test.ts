@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import {
@@ -22,6 +23,7 @@ import {
   MIN_VALE_FILTER_VERSION,
   parseValeVersion,
   resolveConfigPath,
+  resolveValeBinaryPath,
   resolveValeExecutionSettings,
   resolveWindowsDockerProxyArch,
   sha256Hex,
@@ -226,6 +228,121 @@ describe("resolveConfigPath", () => {
 
   test("leaves an empty path untouched", () => {
     assert.equal(resolveConfigPath("", workspaceRoot), "");
+  });
+
+  test("expands a leading ~ to the home directory", () => {
+    assert.equal(
+      resolveConfigPath("~/.vale.ini", workspaceRoot),
+      path.join(os.homedir(), ".vale.ini")
+    );
+  });
+
+  test("substitutes ${userHome}", () => {
+    assert.equal(
+      resolveConfigPath("${userHome}/.vale.ini", workspaceRoot),
+      path.join(os.homedir(), ".vale.ini")
+    );
+  });
+
+  test("substitutes ${env:VAR}", () => {
+    process.env.VALE_VSCODE_TEST_VAR = "/opt/vale-config";
+    assert.equal(
+      resolveConfigPath("${env:VALE_VSCODE_TEST_VAR}/.vale.ini", workspaceRoot),
+      path.join("/opt/vale-config", ".vale.ini")
+    );
+    delete process.env.VALE_VSCODE_TEST_VAR;
+  });
+
+  test("resolves without a workspace root when only ~ is involved", () => {
+    assert.equal(
+      resolveConfigPath("~/.vale.ini", undefined),
+      path.join(os.homedir(), ".vale.ini")
+    );
+  });
+});
+
+describe("resolveValeBinaryPath", () => {
+  const workspaceRoot = path.join("/", "workspace", "root");
+
+  test("preserves bare executable names for PATH lookup in either trust mode", () => {
+    for (const trusted of [true, false]) {
+      for (const name of ["vale", "vale.exe", "vale-custom"]) {
+        assert.equal(resolveValeBinaryPath(name, workspaceRoot, trusted), name);
+      }
+    }
+  });
+
+  test("ignores workspace-relative binaries in Restricted Mode", () => {
+    for (const root of [workspaceRoot, undefined]) {
+      for (const binary of [
+        "./vale", "bin/vale", "../vale", ".\\vale.exe",
+        "${workspaceFolder}/bin/vale", "${workspaceFolder}",
+      ]) {
+        assert.equal(resolveValeBinaryPath(binary, root, false), "");
+      }
+    }
+  });
+
+  test("allows home and absolute binaries in Restricted Mode", () => {
+    const absolute = path.join(os.homedir(), "bin", "vale");
+    for (const binary of [absolute, "~/bin/vale", "${userHome}/bin/vale"]) {
+      assert.equal(resolveValeBinaryPath(binary, workspaceRoot, false), absolute);
+    }
+  });
+
+  test("checks trust after expanding environment variables", () => {
+    const name = "VALE_VSCODE_TEST_BINARY";
+    const previous = process.env[name];
+    try {
+      for (const value of ["bin/vale", "${workspaceFolder}/vale"]) {
+        process.env[name] = value;
+        assert.equal(resolveValeBinaryPath("${env:VALE_VSCODE_TEST_BINARY}", workspaceRoot, false), "");
+      }
+      for (const value of ["vale", path.join(os.homedir(), "bin", "vale")]) {
+        process.env[name] = value;
+        assert.equal(resolveValeBinaryPath("${env:VALE_VSCODE_TEST_BINARY}", workspaceRoot, false), value);
+      }
+    } finally {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    }
+  });
+
+  test("resolves explicit relative binaries in trusted workspaces", () => {
+    assert.equal(resolveValeBinaryPath("./bin/vale", workspaceRoot, true), path.join(workspaceRoot, "bin", "vale"));
+  });
+
+  test("expands a leading ~ to the home directory", () => {
+    assert.equal(
+      resolveValeBinaryPath("~/.local/share/mise/shims/vale", workspaceRoot),
+      path.join(os.homedir(), ".local/share/mise/shims/vale")
+    );
+  });
+
+  test("substitutes ${workspaceFolder}", () => {
+    assert.equal(
+      resolveValeBinaryPath(
+        "${workspaceFolder}/.vscode/mise-tools/vale",
+        workspaceRoot
+      ),
+      path.join(workspaceRoot, ".vscode/mise-tools/vale")
+    );
+  });
+
+  test("resolves a bare relative path against the workspace root", () => {
+    assert.equal(
+      resolveValeBinaryPath(".vscode/mise-tools/vale", workspaceRoot),
+      path.join(workspaceRoot, ".vscode/mise-tools/vale")
+    );
+  });
+
+  test("leaves an absolute path untouched", () => {
+    const absolute = path.join("/", "usr", "local", "bin", "vale");
+    assert.equal(resolveValeBinaryPath(absolute, workspaceRoot), absolute);
+  });
+
+  test("leaves an empty path untouched", () => {
+    assert.equal(resolveValeBinaryPath("", workspaceRoot), "");
   });
 });
 
