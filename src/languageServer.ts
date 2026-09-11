@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 
 import { mkdir, rename, rm } from "node:fs/promises";
 import * as unzipper from "unzipper";
+import { family as detectLibcFamily } from "detect-libc";
 import fs from "fs";
 import * as path from "path";
 
@@ -106,13 +107,6 @@ function shareServerCommands(client: LanguageClient): void {
 /** Lets go of a stopping client's commands, disposing the last reference. */
 function releaseServerCommands(client: LanguageClient): void {
   sharedServerCommands.release(client);
-}
-
-function runtimeGlibcVersion(): string | undefined {
-  const report = process.report?.getReport();
-  if (!report || typeof report === "string") return undefined;
-  return (report as { header?: { glibcVersionRuntime?: string } }).header
-    ?.glibcVersionRuntime;
 }
 
 /** Appends a line to the Vale output channel, prefixed for grep-ability. */
@@ -285,10 +279,15 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
 export async function ensureLanguageServerBinary(
   context: ExtensionContext
 ): Promise<string> {
-  const glibcVersion = runtimeGlibcVersion();
-  if (isUnsupportedLinuxLibc(process.platform, glibcVersion)) {
+  const libcFamily = await detectLibcFamily();
+  if (isUnsupportedLinuxLibc(process.platform, libcFamily)) {
     throw new Error(
       "Vale Language Server publishes glibc Linux binaries only, but this environment appears to use musl libc (common in Alpine containers). Use a glibc-based devcontainer image."
+    );
+  }
+  if (process.platform === "linux" && libcFamily === null) {
+    logDiagnostic(
+      "Could not determine Linux libc family; assuming glibc and proceeding."
     );
   }
 

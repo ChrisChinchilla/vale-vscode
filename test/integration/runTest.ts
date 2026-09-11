@@ -8,7 +8,7 @@ async function run(): Promise<void> {
   // extension host's Electron-as-Node mode into the child VS Code process.
   delete process.env.ELECTRON_RUN_AS_NODE;
 
-  const extensionDevelopmentPath = path.resolve(__dirname, "..");
+  const extensionDevelopmentPath = path.resolve(__dirname, "../../..");
   const extensionTestsPath = path.resolve(__dirname, "suite/index");
   const fixturePath = path.resolve(
     extensionDevelopmentPath,

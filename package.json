@@ -289,7 +289,7 @@
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test out-test/*.test.js",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
-    "test:integration": "npm run test:integration:compile && node out-integration/runTest.js",
+    "test:integration": "npm run test:integration:compile && node out-integration/test/integration/runTest.js",
     "webpack": "webpack --mode production",
     "webpack-dev": "webpack --mode development --watch",
     "test-compile": "tsc -p ./",
@@ -313,6 +313,7 @@
     "webpack-cli": "^7.2.3"
   },
   "dependencies": {
+    "detect-libc": "^2.1.2",
     "vscode-languageclient": "^10.1.1"
   }
 }

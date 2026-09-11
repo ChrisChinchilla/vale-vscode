@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
+import { family as detectLibcFamily, version as detectLibcVersion } from "detect-libc";
 
 import { createValeOutputChannel } from "./ui";
 import {
@@ -19,14 +20,13 @@ import { registerCodeActions } from "./codeActions";
  */
 export async function activate(context: ExtensionContext): Promise<void> {
   const output = createValeOutputChannel(context);
-  const report = process.report?.getReport();
-  const glibc =
-    report && typeof report !== "string"
-      ? (report as { header?: { glibcVersionRuntime?: string } }).header
-          ?.glibcVersionRuntime ?? "not detected"
-      : "not detected";
+  const libcFamily = await detectLibcFamily();
+  const libcVersion = await detectLibcVersion();
+  const libc = libcFamily
+    ? `${libcFamily}${libcVersion ? ` ${libcVersion}` : ""}`
+    : "not detected";
   output.appendLine(
-    `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; glibc: ${glibc}; trusted: ${vscode.workspace.isTrusted}`
+    `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; libc: ${libc}; trusted: ${vscode.workspace.isTrusted}`
   );
 
   // Prevent multiple activations - stop existing clients if present

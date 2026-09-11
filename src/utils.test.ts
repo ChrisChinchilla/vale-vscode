@@ -32,13 +32,23 @@ import {
 } from "./utils";
 
 describe("isUnsupportedLinuxLibc", () => {
-  test("rejects Linux runtimes without glibc", () => {
-    assert.equal(isUnsupportedLinuxLibc("linux", undefined), true);
+  test("rejects Linux runtimes confirmed as musl", () => {
+    assert.equal(isUnsupportedLinuxLibc("linux", "musl"), true);
   });
 
   test("accepts glibc Linux and non-Linux runtimes", () => {
-    assert.equal(isUnsupportedLinuxLibc("linux", "2.36"), false);
-    assert.equal(isUnsupportedLinuxLibc("darwin", undefined), false);
+    assert.equal(isUnsupportedLinuxLibc("linux", "glibc"), false);
+    assert.equal(isUnsupportedLinuxLibc("darwin", null), false);
+    assert.equal(isUnsupportedLinuxLibc("darwin", "musl"), false);
+  });
+
+  // Regression test for https://github.com/ChrisChinchilla/vale-vscode/issues/123:
+  // `process.report`, one of detect-libc's detection strategies, is unavailable
+  // inside the VS Code extension host, so a real glibc Linux host can come back
+  // with no determinable libc family. Treating that "unknown" the same as
+  // "musl" broke activation for every affected glibc user - it must fail open.
+  test("does not treat an undetermined Linux libc family as unsupported", () => {
+    assert.equal(isUnsupportedLinuxLibc("linux", null), false);
   });
 });
 
