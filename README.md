@@ -81,7 +81,7 @@ The following commands are available from the **Vale** panel in the Explorer sid
 
 The extension starts a separate Vale Language Server instance per workspace folder, each scoped to that folder's files. This means:
 
-- You can set settings such as `vale.valeCLI.config` and `vale.vocabPath` per folder (e.g. in each folder's `.vscode/settings.json`) and the extension resolves them relative to that folder, including `${workspaceFolder}` in `vale.valeCLI.config`.
+- You can set settings such as `vale.valeCLI.config`, `vale.valeCLI.path`, and `vale.vocabPath` per folder (e.g. in each folder's `.vscode/settings.json`) and the extension resolves them relative to that folder, including `${workspaceFolder}` in `vale.valeCLI.config` and `vale.valeCLI.path`.
 - Commands run from the **Vale** panel or command palette (**Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary commands) act on the workspace folder containing the currently active file, not always the first folder in the workspace.
 - Adding or removing a folder from the workspace starts or stops its Vale Language Server instance automatically, without needing to reload the window.
 
@@ -137,7 +137,7 @@ If the problem persists, [open an issue](https://github.com/ChrisChinchilla/vale
 The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale_).
 
 - `vale.valeCLI.installVale` (default: `false`): Install Vale automatically if not found on the system.
-- `vale.valeCLI.config` (default: `null`): Absolute or relative path to a Vale configuration file.
+- `vale.valeCLI.config` (default: `null`): Absolute or relative path to a Vale configuration file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`.
 - `vale.valeCLI.minAlertLevel` (default: `inherited`): Defines from which level of errors and above to display in the problems view.
 - `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): Toggle display of warning dialog that you must save a file before Vale lints it.
 - `vale.readabilityProblemLocation` (default: `status`): If you have any `Readability` or `metric` styles, the extension can display the readability score in the status bar, the problems view, or both.
@@ -145,7 +145,7 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.vocabPath` (default: `null`): Name of the Vale vocabulary the **Add to Accept List** / **Add to Reject List** commands and quick fixes write to, resolved relative to `StylesPath` (e.g. `MyVocab` targets `<StylesPath>/config/vocabularies/MyVocab/`).
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
 - `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
-- `vale.valeCLI.path` (default: `null`): Absolute path to the Vale binary to run, instead of the one the language server manages. Ignored when `vale.docker.enabled` is true.
+- `vale.valeCLI.path` (default: `null`): Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names (for example, `vale`) use `PATH`; paths such as `./bin/vale` resolve relative to the workspace. In Restricted Mode, workspace-relative executable paths are ignored in favor of the default Vale executable. Ignored when `vale.docker.enabled` is true.
 - `vale.docker.enabled` (default: `false`): Run Vale inside a Docker container instead of a local install. See [Using Vale via Docker](#using-vale-via-docker) above.
 - `vale.docker.image` (default: `jdkato/vale`): Docker image to run Vale from.
 - `vale.docker.extraArgs` (default: `[]`): Extra arguments spliced into `docker run` before the image name.

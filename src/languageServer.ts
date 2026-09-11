@@ -19,6 +19,7 @@ import {
   sha256Hex,
   buildDockerProxyEnvironment,
   isUnsupportedLinuxLibc,
+  resolveValeBinaryPath,
   SharedRegistry,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
@@ -374,8 +375,10 @@ export async function startClientForFolder(
   );
   // Leave this unset when no custom path is configured so vale-ls can still
   // honor installVale and manage its own Vale binary.
-  let valeBinaryPath =
-    configuration.get<string>("vale.valeCLI.path") || undefined;
+  const rawValeBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
+  let valeBinaryPath = rawValeBinaryPath
+    ? resolveValeBinaryPath(rawValeBinaryPath, workspaceRoot, vscode.workspace.isTrusted)
+    : undefined;
   if (execution.dockerUnavailableReason) {
     vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
   }

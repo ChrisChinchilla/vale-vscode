@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { SpawnOptionsWithoutStdio } from "node:child_process";
+import * as os from "node:os";
 import * as path from "node:path";
 
 /**
@@ -390,25 +391,81 @@ export function buildValeConfigArgs(configPath: string): string[] {
   return configPath ? ["--config", configPath] : [];
 }
 
-export function resolveConfigPath(
-  configPathRaw: string,
-  workspaceRoot: string
+/**
+ * Shared expansion for both `vale.valeCLI.config` and `vale.valeCLI.path`:
+ * `~`/`${userHome}` and `${env:VAR}` resolve unconditionally (they don't
+ * need a workspace), then `${workspaceFolder}` or a bare relative path
+ * resolve against `workspaceRoot` when one is available - e.g. a
+ * single-file (no-folder) window, where such a path is left as-is rather
+ * than guessed at. See https://github.com/ChrisChinchilla/vale-vscode/issues/122.
+ */
+function expandPathSetting(
+  rawPath: string,
+  workspaceRoot: string | undefined
 ): string {
-  let resolvedConfigPath = configPathRaw;
+  if (!rawPath) return rawPath;
 
-  if (configPathRaw.includes("${workspaceFolder}")) {
-    resolvedConfigPath = configPathRaw.replace(
-      /\$\{workspaceFolder\}/g,
-      workspaceRoot
-    );
-  } else if (
-    configPathRaw.startsWith("./") ||
-    (!path.isAbsolute(configPathRaw) && configPathRaw.length > 0)
-  ) {
-    resolvedConfigPath = path.join(workspaceRoot, configPathRaw);
+  let expanded = rawPath;
+
+  if (expanded === "~" || expanded.startsWith("~/") || expanded.startsWith("~\\")) {
+    expanded = path.join(os.homedir(), expanded.slice(1));
   }
 
+  expanded = expanded.replace(/\$\{userHome\}/g, os.homedir());
+  expanded = expanded.replace(
+    /\$\{env:([^}]+)\}/g,
+    (_match, name: string) => process.env[name] ?? ""
+  );
+
+  if (workspaceRoot) {
+    if (expanded.includes("${workspaceFolder}")) {
+      expanded = expanded.replace(/\$\{workspaceFolder\}/g, workspaceRoot);
+    } else if (!path.isAbsolute(expanded)) {
+      expanded = path.join(workspaceRoot, expanded);
+    }
+  }
+
+  return expanded;
+}
+
+export function resolveConfigPath(
+  configPathRaw: string,
+  workspaceRoot?: string
+): string {
+  const resolvedConfigPath = expandPathSetting(configPathRaw, workspaceRoot);
+
   return resolvedConfigPath;
+}
+
+/**
+ * Expands executable paths while preserving bare command names for PATH
+ * lookup. Ignore workspace-relative executables in Restricted Mode, even
+ * when the setting comes from user configuration. An empty result selects
+ * the normal PATH / language-server-managed fallback.
+ */
+export function resolveValeBinaryPath(
+  rawPath: string,
+  workspaceRoot?: string,
+  isWorkspaceTrusted = true
+): string {
+  const expanded = expandPathSetting(rawPath, undefined);
+  const usesWorkspace = expanded.includes("${workspaceFolder}");
+  const isBareCommand = expanded.length > 0 &&
+    !/[\\/:]/.test(expanded) && expanded !== "." && expanded !== "..";
+
+  if (!isWorkspaceTrusted &&
+      (usesWorkspace || (!path.isAbsolute(expanded) && !isBareCommand))) {
+    return "";
+  }
+  if (isBareCommand && !usesWorkspace) return expanded;
+
+  // Expansion has already happened; only resolve the workspace portion here.
+  if (workspaceRoot && usesWorkspace) {
+    return expanded.replace(/\$\{workspaceFolder\}/g, () => workspaceRoot);
+  }
+  return workspaceRoot && expanded && !path.isAbsolute(expanded)
+    ? path.join(workspaceRoot, expanded)
+    : expanded;
 }
 
 /**

@@ -24,7 +24,6 @@ function resolveCommandConfigPath(
   workspaceRoot: string | undefined
 ): string {
   const configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
-  if (!workspaceRoot) return configPathRaw;
   return resolveConfigPath(configPathRaw, workspaceRoot);
 }
 

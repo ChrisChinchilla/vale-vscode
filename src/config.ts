@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   buildValeFilterExpression,
   resolveConfigPath,
+  resolveValeBinaryPath,
   resolveValeExecutionSettings,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
@@ -32,8 +33,12 @@ export function resolveValeExecutionOptions(
   windowsProxyPath?: string,
   windowsProxyUnavailableReason?: string
 ): ValeExecutionOptions {
+  const rawBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
+
   return resolveValeExecutionSettings(
-    configuration.get<string>("vale.valeCLI.path") || undefined,
+    rawBinaryPath
+      ? resolveValeBinaryPath(rawBinaryPath, workspaceRoot, vscode.workspace.isTrusted)
+      : undefined,
     configuration.get<boolean>("vale.docker.enabled") ?? false,
     workspaceRoot,
     platform,
@@ -70,10 +75,7 @@ export function buildValeConfig(
   // Get the config path as a string
   const configPathRaw = configuration.get<string>("vale.valeCLI.config") || "";
 
-  let resolvedConfigPath = configPathRaw;
-  if (workspaceRoot) {
-    resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
-  }
+  const resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
 
   return {
     configPath: resolvedConfigPath as unknown as valeArgs,
