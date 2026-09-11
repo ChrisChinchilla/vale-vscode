@@ -32,12 +32,24 @@ export const EXPECTED_CHECKSUMS: Record<string, string> = {
     "1feaa606013579d170b3ba1af4bc26fe9e281d803e6d0a73c0b7c1bea9ca0917",
 };
 
-/** vale-ls currently publishes GNU-linked Linux binaries, not musl builds. */
+/**
+ * vale-ls currently publishes GNU-linked Linux binaries, not musl builds.
+ * `libcFamily` is `detect-libc`'s result ("glibc", "musl", or `null` when it
+ * couldn't be determined) - deliberately fails *open* on `null` rather than
+ * treating "unknown" the same as "musl". `process.report`, one of
+ * `detect-libc`'s detection strategies, is unavailable inside the VS Code
+ * extension host (unlike a plain Node process), so on some hosts every
+ * strategy can come up empty even though the environment is glibc-based;
+ * blocking on that inconclusive result was a real false positive that broke
+ * activation for glibc users, not a hypothetical one. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/123 and
+ * `.claude/notes/glibc-detection-fix.md`.
+ */
 export function isUnsupportedLinuxLibc(
   processPlatform: string,
-  glibcVersionRuntime: string | undefined
+  libcFamily: string | null
 ): boolean {
-  return processPlatform === "linux" && !glibcVersionRuntime;
+  return processPlatform === "linux" && libcFamily === "musl";
 }
 
 export function detectArch(processArch: string): "x86_64" | "aarch64" | null {

@@ -1,10 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "outDir": "out-integration",
-    "rootDir": "test/integration",
+    "rootDir": ".",
     "lib": ["es2022"],
     "target": "es2022"
   },

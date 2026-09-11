@@ -117,7 +117,12 @@ because trust changes need a manual nudge.
   user-bin or Snap install locations.
 - Alpine/musl is detected before download (`isUnsupportedLinuxLibc` in
   `utils.ts`) and produces an actionable error; vale-ls currently publishes
-  glibc Linux binaries only.
+  glibc Linux binaries only. Detection goes through `detect-libc` rather
+  than reading `process.report` directly, and fails open on an undetermined
+  libc family instead of treating "unknown" as "musl" - see
+  `.claude/notes/glibc-detection-fix.md` for why (issue #123: `process.report`
+  is unavailable inside the extension host, so the old check false-positived
+  on real glibc hosts).
 - Download and startup errors are now logged to the Vale output channel with
   detail, and **Show Diagnostics**/**Restart Language Server** stay
   registered even after initial activation fails, so a broken first install
