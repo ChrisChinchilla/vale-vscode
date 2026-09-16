@@ -109,6 +109,64 @@ export class ValeCommandsProvider
   }
 }
 
+let readabilityStatusBarItem: vscode.StatusBarItem;
+let readabilityDiagnostics: vscode.DiagnosticCollection;
+
+export function createReadabilitySurfaces(
+  context: vscode.ExtensionContext
+): void {
+  readabilityStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100
+  );
+  readabilityStatusBarItem.command = "vale.showMetrics";
+  readabilityDiagnostics =
+    vscode.languages.createDiagnosticCollection("vale-readability");
+  context.subscriptions.push(readabilityStatusBarItem, readabilityDiagnostics);
+}
+
+/**
+ * Displays a file's Flesch-Kincaid grade level per `vale.readabilityProblemLocation`
+ * ("status", "inline", or "both"). Called after each **Vale: Show Readability
+ * Metrics** run, since that's the only point a grade is actually computed.
+ */
+export function showReadabilityResult(
+  uri: vscode.Uri,
+  grade: number | null,
+  location: string
+): void {
+  readabilityDiagnostics.delete(uri);
+  readabilityStatusBarItem.hide();
+
+  if (grade === null) return;
+
+  const rounded = grade.toFixed(1);
+
+  if (location === "status" || location === "both") {
+    readabilityStatusBarItem.text = `$(graph) FK ${rounded}`;
+    readabilityStatusBarItem.tooltip = `Vale: Flesch-Kincaid grade level ${rounded}`;
+    readabilityStatusBarItem.show();
+  }
+
+  if (location === "inline" || location === "both") {
+    const diagnostic = new vscode.Diagnostic(
+      new vscode.Range(0, 0, 0, 0),
+      `Flesch-Kincaid grade level: ${rounded}`,
+      vscode.DiagnosticSeverity.Information
+    );
+    diagnostic.source = "Vale";
+    readabilityDiagnostics.set(uri, [diagnostic]);
+  }
+}
+
+/** Clears any readability status bar/diagnostic left over from a previous file. */
+export function clearReadabilityResult(uri?: vscode.Uri): void {
+  readabilityStatusBarItem.hide();
+  if (uri) {
+    readabilityDiagnostics.delete(uri);
+  }
+}
+
 let valeOutputChannel: vscode.OutputChannel;
 
 export function createValeOutputChannel(

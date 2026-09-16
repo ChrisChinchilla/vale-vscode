@@ -5,11 +5,18 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
 
     steps:
+    - name: Checkout
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     - name: TODO to Issue
-      uses: alstr/todo-to-issue-action@v4
+      uses: alstr/todo-to-issue-action@4120fdbb02461dd1abf18756a7464b8e45347863 # v4

@@ -41,7 +41,7 @@ The extension uses any [configuration](https://vale.sh/docs/topics/config/), [vo
 
 ![A screenshot showing the problems highlighted by Vale in the editor](img/vale-vscode-problems-view.png)
 
-As readability checks are document-wide, and not specific to a line, you can configure where to display readability problems in the `vale.readabilityProblemLocation` setting. The default is to show them in the status bar, but you can also show them in the problems view or both.
+**Vale: Show Readability Metrics** computes a Flesch-Kincaid grade level for the active file's saved content and, since readability is document-wide rather than specific to a line, displays it where the `vale.readabilityProblemLocation` setting says to: the status bar (default), inline in the problems view, or both. It doesn't run automatically as you type or save - re-run the command to refresh it.
 
 ### Quick fixes
 
@@ -139,12 +139,12 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.valeCLI.installVale` (default: `false`): Install Vale automatically if not found on the system.
 - `vale.valeCLI.config` (default: `null`): Absolute or relative path to a Vale configuration file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`.
 - `vale.valeCLI.minAlertLevel` (default: `inherited`): Defines from which level of errors and above to display in the problems view.
-- `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): Toggle display of warning dialog that you must save a file before Vale lints it.
-- `vale.readabilityProblemLocation` (default: `status`): If you have any `Readability` or `metric` styles, the extension can display the readability score in the status bar, the problems view, or both.
+- `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): **Vale: Show Readability Metrics** reads the file from disk, so it warns and offers to save first when the active file has unsaved changes. Set to `true` to skip that dialog.
+- `vale.readabilityProblemLocation` (default: `status`): Where **Vale: Show Readability Metrics** displays the Flesch-Kincaid grade level it computes: the status bar (`status`), the problems view (`inline`), or both (`both`).
 - `vale.enableSpellcheck` (default: `true`): Enable in-built spell checking for any `Spelling` styles.
 - `vale.vocabPath` (default: `null`): Name of the Vale vocabulary the **Add to Accept List** / **Add to Reject List** commands and quick fixes write to, resolved relative to `StylesPath` (e.g. `MyVocab` targets `<StylesPath>/config/vocabularies/MyVocab/`).
 - `vale.valeCLI.syncOnStartup` (default: `false`): If you have packages in a _.vale.ini_ file, then sync them on startup.
-- `vale.valeCLI.filter` (default: `null`): Add additional [Vale filters](https://vale.sh/docs/filters).
+- `vale.valeCLI.filter` (default: `null`): A raw [Vale filter](https://vale.sh/docs/filters) expression, combined with `vale.valeCLI.minAlertLevel` and `vale.enableSpellcheck`'s filters using `and`.
 - `vale.valeCLI.path` (default: `null`): Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names (for example, `vale`) use `PATH`; paths such as `./bin/vale` resolve relative to the workspace. In Restricted Mode, workspace-relative executable paths are ignored in favor of the default Vale executable. Ignored when `vale.docker.enabled` is true.
 - `vale.docker.enabled` (default: `false`): Run Vale inside a Docker container instead of a local install. See [Using Vale via Docker](#using-vale-via-docker) above.
 - `vale.docker.image` (default: `jdkato/vale`): Docker image to run Vale from.
@@ -156,7 +156,7 @@ The extension offers a number of settings and configuration options (_Preference
 ### Advanced and debugging settings
 
 - `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server in the output panel. Set to `messages` or `verbose` when reporting a bug.
-- `vale.maxNumberOfProblems` (default: `100`): Requested cap on the number of problems reported per file. Currently has no effect and is pending removal.
+- `vale.maxNumberOfProblems` (default: `100`): Caps the number of problems shown per file. Applied client-side (vale-ls itself has no such limit), so the file is still linted in full - only what's displayed is trimmed. Set to `0` for no limit.
 
 ## Changelog
 

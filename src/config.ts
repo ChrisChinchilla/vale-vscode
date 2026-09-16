@@ -10,15 +10,13 @@ import type { ValeExecutionOptions } from "./utils";
 
 export type { ValeExecutionOptions } from "./utils";
 
-export type valeConfigOptions =
-  | "configPath"
-  | "syncOnStartup"
-  | "filter"
-  | "installVale"
-  | "valeBinaryPath";
-
-export interface valeArgs {
-  value: string;
+/** vale-ls `initializationOptions` this extension sends on every client start. */
+export interface ValeInitializationOptions {
+  configPath: string;
+  syncOnStartup: boolean;
+  filter: string;
+  installVale: boolean;
+  valeBinaryPath: string;
 }
 
 /**
@@ -62,14 +60,16 @@ export function buildValeConfig(
   workspaceRoot: string | undefined,
   valeBinaryPath?: string,
   dockerModeActive?: boolean
-): Record<valeConfigOptions, valeArgs> {
+): ValeInitializationOptions {
   const minAlertLevel =
     configuration.get<string>("vale.valeCLI.minAlertLevel") ?? "inherited";
   const enableSpellcheck =
     configuration.get<boolean>("vale.enableSpellcheck") ?? false;
+  const customFilter = configuration.get<string>("vale.valeCLI.filter") || "";
   const filterExpression = buildValeFilterExpression(
     minAlertLevel,
-    enableSpellcheck
+    enableSpellcheck,
+    customFilter
   );
 
   // Get the config path as a string
@@ -78,15 +78,16 @@ export function buildValeConfig(
   const resolvedConfigPath = resolveConfigPath(configPathRaw, workspaceRoot);
 
   return {
-    configPath: resolvedConfigPath as unknown as valeArgs,
-    syncOnStartup: configuration.get("vale.valeCLI.syncOnStartup") as valeArgs,
-    filter: filterExpression as unknown as valeArgs,
+    configPath: resolvedConfigPath,
+    syncOnStartup:
+      configuration.get<boolean>("vale.valeCLI.syncOnStartup") ?? false,
+    filter: filterExpression,
     // TODO: Build into proper onboarding
     // Installing a locally-managed Vale copy is pointless when Docker mode
     // is running vale inside a container instead.
-    installVale: (dockerModeActive
+    installVale: dockerModeActive
       ? false
-      : configuration.get("vale.valeCLI.installVale")) as valeArgs,
-    valeBinaryPath: (valeBinaryPath ?? "") as unknown as valeArgs,
+      : configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
+    valeBinaryPath: valeBinaryPath ?? "",
   };
 }

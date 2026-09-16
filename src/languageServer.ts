@@ -19,6 +19,7 @@ import {
   parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
+  capDiagnostics,
   isUnsupportedLinuxLibc,
   resolveValeBinaryPath,
   SharedRegistry,
@@ -120,7 +121,8 @@ function logDiagnostic(message: string): void {
  * named asset) - older versions fail every lint with a cryptic
  * `filter '<expr>' not found` as soon as any filter is sent, which happens
  * with default settings (`vale.enableSpellcheck` defaults to `false`, and
- * `buildValeConfig` always sends `.Extends != "spelling"` in that case). See
+ * `buildValeConfig` always sends `.Extends != "spelling"` in that case, and
+ * the same applies once a `vale.valeCLI.filter` expression is set). See
  * https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
  * `.claude/notes/vale-filter-version-check.md`.
  *
@@ -149,10 +151,10 @@ async function warnIfValeTooOldForFilters(
   const [minMajor, minMinor, minPatch] = MIN_VALE_FILTER_VERSION;
   const message =
     `Vale ${major}.${minor}.${patch} is too old to apply Vale VSCode's filter ` +
-    `settings (minAlertLevel/enableSpellcheck) - Vale ${minMajor}.${minMinor}.${minPatch}+ ` +
+    `settings (minAlertLevel/enableSpellcheck/filter) - Vale ${minMajor}.${minMinor}.${minPatch}+ ` +
     `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
-    `set both vale.valeCLI.minAlertLevel to "inherited" and vale.enableSpellcheck to true ` +
-    `to avoid sending a filter at all.`;
+    `set vale.valeCLI.minAlertLevel to "inherited", vale.enableSpellcheck to true, and clear ` +
+    `vale.valeCLI.filter to avoid sending a filter at all.`;
   logDiagnostic(message);
   vscode.window.showWarningMessage(`Vale: ${message}`);
 }
@@ -400,12 +402,12 @@ export async function startClientForFolder(
     Boolean(execution.docker)
   );
   logDiagnostic(
-    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${String(valeConfig.configPath) || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
+    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
   );
   await warnIfValeTooOldForFilters(
     workspaceRoot ?? process.cwd(),
     execution,
-    String(valeConfig.filter)
+    valeConfig.filter
   );
 
   const tempArgs: never[] = [];
@@ -451,6 +453,14 @@ export async function startClientForFolder(
       provideCodeActions: async (document, range, context, token, next) => {
         const results = await next(document, range, context, token);
         return results?.filter((item) => !isServerReplaceFix(item));
+      },
+      // Implements `vale.maxNumberOfProblems`: vale-ls has no such limit
+      // itself, so cap what reaches the Problems view client-side.
+      handleDiagnostics: (uri, diagnostics, next) => {
+        const maxProblems = vscode.workspace
+          .getConfiguration(undefined, uri)
+          .get<number>("vale.maxNumberOfProblems");
+        next(uri, capDiagnostics(diagnostics, maxProblems) as typeof diagnostics);
       },
     },
   };
@@ -533,6 +543,7 @@ export function registerWorkspaceFolderWatcher(
 const VALE_CONFIG_SETTINGS = [
   "vale.enableSpellcheck",
   "vale.valeCLI.minAlertLevel",
+  "vale.valeCLI.filter",
   "vale.valeCLI.config",
   "vale.valeCLI.syncOnStartup",
   "vale.valeCLI.installVale",

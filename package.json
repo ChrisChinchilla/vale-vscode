@@ -133,7 +133,7 @@
           "scope": "resource",
           "type": "string",
           "default": null,
-          "description": "An output filter to apply when calling Vale."
+          "description": "A raw Vale filter expression (e.g. `.Line > 10`), combined with the minimum alert level and spell-checking filters using `and`."
         },
         "vale.valeCLI.installVale": {
           "scope": "resource",

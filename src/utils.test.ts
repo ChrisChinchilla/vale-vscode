@@ -12,6 +12,8 @@ import {
   buildValeConfigArgs,
   buildValeFilterExpression,
   buildValeSpawnOptions,
+  capDiagnostics,
+  computeFleschKincaidGrade,
   detectArch,
   detectPlatform,
   getExecutableName,
@@ -26,8 +28,10 @@ import {
   resolveValeBinaryPath,
   resolveValeExecutionSettings,
   resolveWindowsDockerProxyArch,
+  sanitizeVocabularyWord,
   sha256Hex,
   shellQuoteSingle,
+  shouldWarnBeforeLinting,
   verifyChecksum,
 } from "./utils";
 
@@ -211,6 +215,99 @@ describe("buildValeFilterExpression", () => {
       buildValeFilterExpression("warning", false),
       `.Level in ["warning", "error"] and .Extends != "spelling"`
     );
+  });
+
+  test("appends a parenthesized custom filter", () => {
+    assert.equal(
+      buildValeFilterExpression("inherited", true, `.Line > 10`),
+      `(.Line > 10)`
+    );
+  });
+
+  test("combines alert level, spellcheck, and custom filters", () => {
+    assert.equal(
+      buildValeFilterExpression("warning", false, `.Line > 10 or .Match == "foo"`),
+      `.Level in ["warning", "error"] and .Extends != "spelling" and (.Line > 10 or .Match == "foo")`
+    );
+  });
+
+  test("ignores a blank custom filter", () => {
+    assert.equal(buildValeFilterExpression("inherited", true, "   "), "");
+  });
+});
+
+describe("sanitizeVocabularyWord", () => {
+  test("trims surrounding whitespace", () => {
+    assert.equal(sanitizeVocabularyWord("  colour  "), "colour");
+  });
+
+  test("collapses embedded newlines to a space", () => {
+    assert.equal(
+      sanitizeVocabularyWord("colour\nreject.txt\nmalicious"),
+      "colour reject.txt malicious"
+    );
+  });
+
+  test("strips carriage returns", () => {
+    assert.equal(sanitizeVocabularyWord("colour\r\nfoo"), "colour foo");
+  });
+
+  test("returns an empty string for whitespace-only input", () => {
+    assert.equal(sanitizeVocabularyWord("   \n  "), "");
+  });
+});
+
+describe("computeFleschKincaidGrade", () => {
+  test("computes the standard formula", () => {
+    // words=26, sentences=4, syllables=36 (from a real `vale ls-metrics` sample)
+    const grade = computeFleschKincaidGrade(26, 4, 36);
+    assert.ok(grade !== null);
+    assert.ok(Math.abs(grade - (0.39 * (26 / 4) + 11.8 * (36 / 26) - 15.59)) < 1e-9);
+  });
+
+  test("returns null with no words", () => {
+    assert.equal(computeFleschKincaidGrade(0, 4, 36), null);
+  });
+
+  test("returns null with no sentences", () => {
+    assert.equal(computeFleschKincaidGrade(26, 0, 36), null);
+  });
+
+  test("returns null with undefined counts", () => {
+    assert.equal(computeFleschKincaidGrade(undefined, undefined, undefined), null);
+  });
+});
+
+describe("shouldWarnBeforeLinting", () => {
+  test("warns for a dirty document by default", () => {
+    assert.equal(shouldWarnBeforeLinting(true, false), true);
+  });
+
+  test("doesn't warn for a saved document", () => {
+    assert.equal(shouldWarnBeforeLinting(false, false), false);
+  });
+
+  test("doesn't warn when the user suppressed the warning", () => {
+    assert.equal(shouldWarnBeforeLinting(true, true), false);
+  });
+});
+
+describe("capDiagnostics", () => {
+  test("leaves diagnostics under the cap untouched", () => {
+    assert.deepEqual(capDiagnostics([1, 2, 3], 100), [1, 2, 3]);
+  });
+
+  test("truncates to the cap", () => {
+    assert.deepEqual(capDiagnostics([1, 2, 3, 4, 5], 2), [1, 2]);
+  });
+
+  test("treats an undefined cap as unlimited", () => {
+    assert.deepEqual(capDiagnostics([1, 2, 3], undefined), [1, 2, 3]);
+  });
+
+  test("treats a non-positive cap as unlimited", () => {
+    assert.deepEqual(capDiagnostics([1, 2, 3], 0), [1, 2, 3]);
+    assert.deepEqual(capDiagnostics([1, 2, 3], -1), [1, 2, 3]);
   });
 });
 

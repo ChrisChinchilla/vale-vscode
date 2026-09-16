@@ -3,11 +3,11 @@
 	"compilerOptions": {
 		"module": "es2022",
 		"moduleResolution": "bundler",
-		"target": "es2017",
+		"target": "es2022",
 		"esModuleInterop": true,
 		"outDir": "out",
 		"lib": [
-			"es6"
+			"es2022"
 		],
 		"sourceMap": true,
 		"rootDir": "src",

@@ -163,3 +163,66 @@ export async function getStylesPathsFromVale(
     });
   });
 }
+
+/**
+ * Gets a file's prose metrics (word/sentence/syllable counts, etc.) via
+ * `vale ls-metrics`. Reads from disk, like every other direct CLI command,
+ * so it reflects a file's last-saved content, not unsaved editor changes.
+ */
+export async function getFileMetrics(
+  filePath: string,
+  workspaceRoot: string,
+  execution: ValeExecutionOptions,
+  configPath = ""
+): Promise<ValeFileMetrics | null> {
+  return new Promise((resolve) => {
+    const valeProcess = spawnVale(
+      [...buildValeConfigArgs(configPath), "ls-metrics", filePath],
+      workspaceRoot,
+      execution
+    );
+
+    let stdout = "";
+    let stderr = "";
+
+    valeProcess.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    valeProcess.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    valeProcess.on("close", (code) => {
+      if (code !== 0) {
+        console.error("Vale ls-metrics failed:", stderr);
+        resolve(null);
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(stdout) as ValeFileMetrics);
+      } catch (error) {
+        console.error("Failed to parse Vale metrics:", error);
+        resolve(null);
+      }
+    });
+
+    valeProcess.on("error", (error) => {
+      console.error("Failed to run vale ls-metrics:", error);
+      resolve(null);
+    });
+  });
+}
+
+/** Shape of `vale ls-metrics`' JSON output. Fields are absent, not zero, on an empty file. */
+export interface ValeFileMetrics {
+  words?: number;
+  sentences?: number;
+  syllables?: number;
+  characters?: number;
+  paragraphs?: number;
+  complex_words?: number;
+  long_words?: number;
+  polysyllabic_words?: number;
+}
