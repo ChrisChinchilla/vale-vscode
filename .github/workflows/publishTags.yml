@@ -20,19 +20,21 @@ jobs:
     needs: [parity, validate]
     if: needs.parity.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
       - run: npm ci
       - name: Publish to Open VSX Registry
-        uses: HaaLeo/publish-vscode-extension@v1
+        uses: HaaLeo/publish-vscode-extension@f4ece70f329f66686bd71c54b1671353fe320e49 # v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
       - name: Publish to Visual Studio Marketplace
-        uses: HaaLeo/publish-vscode-extension@v1
+        uses: HaaLeo/publish-vscode-extension@f4ece70f329f66686bd71c54b1671353fe320e49 # v1
         with:
           pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com

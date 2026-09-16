@@ -16,6 +16,8 @@ on:
         description: "'true' when the pushed tag's minor version is odd."
         value: ${{ jobs.parity.outputs.is_prerelease }}
 
+permissions: {}
+
 jobs:
   parity:
     runs-on: ubuntu-latest

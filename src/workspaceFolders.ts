@@ -16,10 +16,14 @@ export function clientKeyFor(folder?: vscode.WorkspaceFolder): string {
 
 /**
  * Picks the workspace folder a command should act on: the folder containing
- * the active editor's document if there is one, otherwise the first
- * workspace folder.
+ * the active editor's document if there is one. Otherwise, with exactly one
+ * workspace folder there's nothing to choose, so it's returned directly;
+ * with more than one, silently defaulting to the first would be a guess, so
+ * this prompts instead.
  */
-export function getRelevantWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+export async function getRelevantWorkspaceFolder(): Promise<
+  vscode.WorkspaceFolder | undefined
+> {
   const activeUri = vscode.window.activeTextEditor?.document.uri;
   if (activeUri) {
     const folder = vscode.workspace.getWorkspaceFolder(activeUri);
@@ -27,5 +31,13 @@ export function getRelevantWorkspaceFolder(): vscode.WorkspaceFolder | undefined
       return folder;
     }
   }
-  return vscode.workspace.workspaceFolders?.[0];
+
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length <= 1) {
+    return folders?.[0];
+  }
+
+  return vscode.window.showWorkspaceFolderPick({
+    placeHolder: "Select the workspace folder this Vale command should act on",
+  });
 }

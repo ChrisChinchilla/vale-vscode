@@ -46,6 +46,20 @@ in `src/lsp.ts` and was later split out into these modules - see
   document, falling back to the first workspace folder — instead of always
   using `workspaceFolders[0]`.
 
+## Ambiguous-folder prompting (later addition)
+
+`getRelevantWorkspaceFolder()` no longer silently falls back to
+`workspaceFolders[0]` when there's more than one folder and no active-editor
+folder to infer from (e.g. running **Vale: Sync** from the Command Palette
+with no editor open, in a 3-folder workspace) - it now prompts via
+`vscode.window.showWorkspaceFolderPick()` instead of guessing. `commands.ts`'s
+`resolveCommandContext` treats a cancelled prompt as "abort the command,"
+distinguishing it from the ordinary single-folder/no-workspace case (where
+`undefined` just means "there's nothing to choose, proceed with the
+fallback working directory") by re-checking
+`vscode.workspace.workspaceFolders.length` itself, since the picker function
+can't return a different sentinel for "cancelled" vs "nothing to pick."
+
 ## Known remaining limitation
 
 `vale.valeCLI.path` (custom Vale binary path) still isn't wired up per the

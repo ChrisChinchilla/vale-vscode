@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
 import { family as detectLibcFamily, version as detectLibcVersion } from "detect-libc";
 
-import { createValeOutputChannel } from "./ui";
+import { clearReadabilityResult, createReadabilitySurfaces, createValeOutputChannel } from "./ui";
 import {
   ensureLanguageServerBinary,
   hasActiveClients,
@@ -20,6 +20,12 @@ import { registerCodeActions } from "./codeActions";
  */
 export async function activate(context: ExtensionContext): Promise<void> {
   const output = createValeOutputChannel(context);
+  createReadabilitySurfaces(context);
+  // The status bar item reflects a single on-demand Show Metrics run, so
+  // switching files makes it stale - hide it until re-run for the new file.
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => clearReadabilityResult())
+  );
   const libcFamily = await detectLibcFamily();
   const libcVersion = await detectLibcVersion();
   const libc = libcFamily

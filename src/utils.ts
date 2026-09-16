@@ -109,13 +109,16 @@ export function buildValeSpawnOptions(
 }
 
 /**
- * Builds the combined Vale filter expression `vale.valeCLI.minAlertLevel`
- * and `vale.enableSpellcheck` translate to, since vale-ls only accepts a
- * single `filter` option rather than these two legacy settings directly.
+ * Builds the combined Vale filter expression `vale.valeCLI.minAlertLevel`,
+ * `vale.enableSpellcheck`, and the freeform `vale.valeCLI.filter` setting
+ * translate to, since vale-ls only accepts a single `filter` option rather
+ * than these settings directly. `customFilter` is parenthesized before
+ * being AND-ed in, since it may itself contain a top-level `or`.
  */
 export function buildValeFilterExpression(
   minAlertLevel: string,
-  enableSpellcheck: boolean
+  enableSpellcheck: boolean,
+  customFilter = ""
 ): string {
   const filters: string[] = [];
 
@@ -131,7 +134,69 @@ export function buildValeFilterExpression(
     filters.push(`.Extends != "spelling"`);
   }
 
+  if (customFilter.trim()) {
+    filters.push(`(${customFilter.trim()})`);
+  }
+
   return filters.join(" and ");
+}
+
+/**
+ * Computes the Flesch-Kincaid grade level from `vale ls-metrics` counts,
+ * per Vale's own documented formula:
+ * `0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59`.
+ * Returns `null` when there isn't enough content to divide by (no words or
+ * no sentences), e.g. an empty file.
+ */
+export function computeFleschKincaidGrade(
+  words: number | undefined,
+  sentences: number | undefined,
+  syllables: number | undefined
+): number | null {
+  if (!words || !sentences || !syllables) return null;
+  return 0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59;
+}
+
+/**
+ * Whether to warn the user that a dirty (unsaved) document's saved-on-disk
+ * content is what a direct CLI command (e.g. Show Readability Metrics) will
+ * actually read, since those commands operate on the file on disk rather
+ * than the editor buffer. Governed by
+ * `vale.doNotShowWarningForFileToBeSavedBeforeLinting`.
+ */
+export function shouldWarnBeforeLinting(
+  isDirty: boolean,
+  doNotShowWarning: boolean
+): boolean {
+  return isDirty && !doNotShowWarning;
+}
+
+/**
+ * Caps the diagnostics vale-ls reports for one file to `maxProblems`,
+ * implementing `vale.maxNumberOfProblems` client-side since vale-ls itself
+ * has no such limit. A non-positive or missing `maxProblems` is treated as
+ * "no limit".
+ */
+export function capDiagnostics<T>(
+  diagnostics: readonly T[],
+  maxProblems: number | undefined
+): readonly T[] {
+  if (!maxProblems || maxProblems <= 0 || diagnostics.length <= maxProblems) {
+    return diagnostics;
+  }
+  return diagnostics.slice(0, maxProblems);
+}
+
+/**
+ * Sanitizes a word/phrase before it's appended as a line to a vocabulary
+ * file (`accept.txt`/`reject.txt`). Vale reads these files one entry per
+ * line, so an entry containing a newline would silently inject extra
+ * lines (e.g. additional accept/reject rules, or Vale regex directives)
+ * beyond what the user submitted. Returns an empty string when nothing
+ * usable remains, which the caller treats as invalid input.
+ */
+export function sanitizeVocabularyWord(word: string): string {
+  return word.replace(/[\r\n]+/g, " ").trim();
 }
 
 /**

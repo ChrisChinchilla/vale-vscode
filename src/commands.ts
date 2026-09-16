@@ -4,10 +4,20 @@ import { ExtensionContext } from "vscode";
 
 import { getRelevantWorkspaceFolder } from "./workspaceFolders";
 import { addToVocabulary } from "./vocabulary";
-import { runValeCommand } from "./cli";
-import { getValeOutputChannel, registerValeCommandsTreeView } from "./ui";
+import { getFileMetrics, runValeCommand } from "./cli";
+import {
+  clearReadabilityResult,
+  getValeOutputChannel,
+  registerValeCommandsTreeView,
+  showReadabilityResult,
+} from "./ui";
 import { resolveValeExecutionOptions } from "./config";
-import { buildValeConfigArgs, resolveConfigPath } from "./utils";
+import {
+  buildValeConfigArgs,
+  computeFleschKincaidGrade,
+  resolveConfigPath,
+  shouldWarnBeforeLinting,
+} from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { getWindowsDockerProxy } from "./docker";
 
@@ -50,6 +60,36 @@ function requireTrustedWorkspace(): boolean {
   return false;
 }
 
+/**
+ * Direct CLI commands (Show Readability Metrics, in practice) read a file
+ * from disk, not the editor buffer, so an unsaved document silently
+ * produces stale results. Warns and offers to save first, unless
+ * `vale.doNotShowWarningForFileToBeSavedBeforeLinting` suppresses it.
+ * Returns whether the caller should proceed.
+ */
+async function confirmSavedBeforeLinting(
+  document: vscode.TextDocument,
+  configuration: vscode.WorkspaceConfiguration
+): Promise<boolean> {
+  const doNotShowWarning =
+    configuration.get<boolean>(
+      "vale.doNotShowWarningForFileToBeSavedBeforeLinting"
+    ) ?? false;
+
+  if (!shouldWarnBeforeLinting(document.isDirty, doNotShowWarning)) {
+    return true;
+  }
+
+  const choice = await vscode.window.showWarningMessage(
+    "Vale: this file has unsaved changes. Vale reads the file from disk, so results may not reflect your edits.",
+    "Save and Continue",
+    "Cancel"
+  );
+
+  if (choice !== "Save and Continue") return false;
+  return document.save();
+}
+
 function resolveCommandExecution(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
@@ -70,6 +110,50 @@ function resolveCommandExecution(
   return execution;
 }
 
+/** Formats a caught value as an error message, without assuming it's an `Error`. */
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Shows a caught error the same way across every command: `Vale: <verb> - <message>`. */
+function showCommandError(verb: string, error: unknown): void {
+  vscode.window.showErrorMessage(`Vale: ${verb} - ${formatError(error)}`);
+}
+
+interface CommandContext {
+  folder: vscode.WorkspaceFolder | undefined;
+  configuration: vscode.WorkspaceConfiguration;
+  execution: ValeExecutionOptions;
+  configPath: string;
+  workingDir: string;
+}
+
+/**
+ * Resolves the workspace folder, settings, execution mode, and config path
+ * every direct CLI command needs, all scoped consistently to the same
+ * folder. Returns `undefined` when the workspace folder is ambiguous (more
+ * than one folder, no active-editor folder to infer from) and the user
+ * cancelled `getRelevantWorkspaceFolder`'s disambiguation prompt - callers
+ * should abort in that case rather than guess.
+ */
+async function resolveCommandContext(
+  context: ExtensionContext,
+  fallbackWorkingDir: string
+): Promise<CommandContext | undefined> {
+  const folder = await getRelevantWorkspaceFolder();
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folder && folders && folders.length > 1) {
+    return undefined;
+  }
+
+  const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
+  const execution = resolveCommandExecution(configuration, folder?.uri.fsPath, context);
+  const configPath = resolveCommandConfigPath(configuration, folder?.uri.fsPath);
+  const workingDir = folder?.uri.fsPath ?? fallbackWorkingDir;
+
+  return { folder, configuration, execution, configPath, workingDir };
+}
+
 /**
  * Registers all user-facing Vale commands (command palette, editor context
  * menu, and the "Vale" Explorer sidebar tree view).
@@ -80,158 +164,87 @@ export function registerCommands(
 ): void {
   const valeOutputChannel = getValeOutputChannel();
 
-  // Register vocabulary commands
-  const addToAcceptCommand = vscode.commands.registerCommand(
-    "vale.addToAcceptList",
-    async () => {
+  /**
+   * Shared handler behind both **Add to Accept List** and **Add to Reject
+   * List** - the two commands only ever differed in which vocabulary file
+   * they write to.
+   */
+  const addSelectionToVocabulary = (fileName: "accept.txt" | "reject.txt") =>
+    async (): Promise<void> => {
       if (!requireTrustedWorkspace()) return;
 
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showErrorMessage("No active editor");
+        vscode.window.showErrorMessage("Vale: No active editor");
         return;
       }
 
-      const selection = editor.selection;
-      const word = editor.document.getText(selection).trim();
-
+      const word = editor.document.getText(editor.selection).trim();
       if (!word) {
-        vscode.window.showErrorMessage("No text selected");
+        vscode.window.showErrorMessage("Vale: No text selected");
         return;
       }
 
-      // Get vocabulary path from settings, scoped to the folder containing
-      // the active file so multi-root per-folder overrides are respected
-      const folder = getRelevantWorkspaceFolder();
-      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-      const vocabPath = configuration.get<string>("vale.vocabPath");
+      const cmdContext = await resolveCommandContext(
+        context,
+        path.dirname(editor.document.uri.fsPath)
+      );
+      if (!cmdContext) return;
+
+      const vocabPath = cmdContext.configuration.get<string>("vale.vocabPath");
       if (!vocabPath) {
         vscode.window.showErrorMessage(
-          "Please set vale.vocabPath in your settings to use vocabulary features"
+          "Vale: Please set vale.vocabPath in your settings to use vocabulary features"
         );
         return;
       }
 
       try {
-        const workingDir = folder?.uri.fsPath ??
-                          path.dirname(editor.document.uri.fsPath);
-        const execution = resolveCommandExecution(
-          configuration,
-          folder?.uri.fsPath,
-          context
-        );
-        const configPath = resolveCommandConfigPath(
-          configuration,
-          folder?.uri.fsPath
-        );
         await addToVocabulary(
           word,
           vocabPath,
-          "accept.txt",
-          workingDir,
-          execution,
-          configPath
+          fileName,
+          cmdContext.workingDir,
+          cmdContext.execution,
+          cmdContext.configPath
         );
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
-        );
+        showCommandError("Failed to add word", error);
       }
-    }
+    };
+
+  const addToAcceptCommand = vscode.commands.registerCommand(
+    "vale.addToAcceptList",
+    addSelectionToVocabulary("accept.txt")
   );
 
   const addToRejectCommand = vscode.commands.registerCommand(
     "vale.addToRejectList",
-    async () => {
-      if (!requireTrustedWorkspace()) return;
-
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage("No active editor");
-        return;
-      }
-
-      const selection = editor.selection;
-      const word = editor.document.getText(selection).trim();
-
-      if (!word) {
-        vscode.window.showErrorMessage("No text selected");
-        return;
-      }
-
-      // Get vocabulary path from settings, scoped to the folder containing
-      // the active file so multi-root per-folder overrides are respected
-      const folder = getRelevantWorkspaceFolder();
-      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-      const vocabPath = configuration.get<string>("vale.vocabPath");
-      if (!vocabPath) {
-        vscode.window.showErrorMessage(
-          "Please set vale.vocabPath in your settings to use vocabulary features"
-        );
-        return;
-      }
-
-      try {
-        const workingDir = folder?.uri.fsPath ??
-                          path.dirname(editor.document.uri.fsPath);
-        const execution = resolveCommandExecution(
-          configuration,
-          folder?.uri.fsPath,
-          context
-        );
-        const configPath = resolveCommandConfigPath(
-          configuration,
-          folder?.uri.fsPath
-        );
-        await addToVocabulary(
-          word,
-          vocabPath,
-          "reject.txt",
-          workingDir,
-          execution,
-          configPath
-        );
-      } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to add word: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    }
+    addSelectionToVocabulary("reject.txt")
   );
 
   // Helper function to run vale sync
   const runValeSync = async () => {
     if (!requireTrustedWorkspace()) return;
 
-    try {
-      const folder = getRelevantWorkspaceFolder();
-      const workingDir = folder?.uri.fsPath ?? process.cwd();
-      const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-      const execution = resolveCommandExecution(
-        configuration,
-        folder?.uri.fsPath,
-        context
-      );
-      const configPath = resolveCommandConfigPath(
-        configuration,
-        folder?.uri.fsPath
-      );
+    const cmdContext = await resolveCommandContext(context, process.cwd());
+    if (!cmdContext) return;
 
+    try {
       valeOutputChannel.show(true);
       valeOutputChannel.appendLine("\nRunning vale sync...\n");
 
       await runValeCommand(
-        [...buildValeConfigArgs(configPath), "sync"],
-        workingDir,
-        execution
+        [...buildValeConfigArgs(cmdContext.configPath), "sync"],
+        cmdContext.workingDir,
+        cmdContext.execution
       );
 
       valeOutputChannel.appendLine("\nSync completed successfully.");
       vscode.window.showInformationMessage("Vale: Sync completed successfully");
     } catch (error) {
       console.error("Vale sync failed:", error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      vscode.window.showErrorMessage(`Vale: Sync failed - ${errorMessage}`);
+      showCommandError("Sync failed", error);
     }
   };
 
@@ -244,32 +257,20 @@ export function registerCommands(
     async () => {
       if (!requireTrustedWorkspace()) return;
 
-      try {
-        const folder = getRelevantWorkspaceFolder();
-        const workingDir = folder?.uri.fsPath ?? process.cwd();
-        const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-        const execution = resolveCommandExecution(
-          configuration,
-          folder?.uri.fsPath,
-          context
-        );
-        const configPath = resolveCommandConfigPath(
-          configuration,
-          folder?.uri.fsPath
-        );
+      const cmdContext = await resolveCommandContext(context, process.cwd());
+      if (!cmdContext) return;
 
+      try {
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine("\nRunning vale ls-config...\n");
 
         await runValeCommand(
-          [...buildValeConfigArgs(configPath), "ls-config"],
-          workingDir,
-          execution
+          [...buildValeConfigArgs(cmdContext.configPath), "ls-config"],
+          cmdContext.workingDir,
+          cmdContext.execution
         );
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Vale: Failed to show configuration - ${error instanceof Error ? error.message : String(error)}`
-        );
+        showCommandError("Failed to show configuration", error);
       }
     }
   );
@@ -288,34 +289,51 @@ export function registerCommands(
 
       const filePath = editor.document.uri.fsPath;
 
-      try {
-        const folder = getRelevantWorkspaceFolder();
-        const workingDir = folder?.uri.fsPath ?? path.dirname(filePath);
-        const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
-        const execution = resolveCommandExecution(
-          configuration,
-          folder?.uri.fsPath,
-          context
-        );
-        const configPath = resolveCommandConfigPath(
-          configuration,
-          folder?.uri.fsPath
-        );
+      const cmdContext = await resolveCommandContext(context, path.dirname(filePath));
+      if (!cmdContext) return;
 
+      if (!(await confirmSavedBeforeLinting(editor.document, cmdContext.configuration))) {
+        return;
+      }
+
+      try {
         valeOutputChannel.show(true);
         valeOutputChannel.appendLine(
           `\nRunning vale ls-metrics for ${path.basename(filePath)}...\n`
         );
 
-        await runValeCommand(
-          [...buildValeConfigArgs(configPath), "ls-metrics", filePath],
-          workingDir,
-          execution
+        const metrics = await getFileMetrics(
+          filePath,
+          cmdContext.workingDir,
+          cmdContext.execution,
+          cmdContext.configPath
         );
+
+        if (!metrics) {
+          throw new Error("vale ls-metrics produced no output");
+        }
+
+        valeOutputChannel.appendLine(JSON.stringify(metrics, null, 2));
+
+        const grade = computeFleschKincaidGrade(
+          metrics.words,
+          metrics.sentences,
+          metrics.syllables
+        );
+        const location =
+          cmdContext.configuration.get<string>("vale.readabilityProblemLocation") ??
+          "status";
+
+        if (grade === null) {
+          clearReadabilityResult(editor.document.uri);
+        } else {
+          valeOutputChannel.appendLine(
+            `Flesch-Kincaid grade level: ${grade.toFixed(1)}`
+          );
+          showReadabilityResult(editor.document.uri, grade, location);
+        }
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Vale: Failed to show metrics - ${error instanceof Error ? error.message : String(error)}`
-        );
+        showCommandError("Failed to show metrics", error);
       }
     }
   );
@@ -336,11 +354,10 @@ export function registerCommands(
           "Vale: Language Server restarted successfully"
         );
       } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        valeOutputChannel.appendLine(`[diagnostics] Restart failed: ${detail}`);
-        vscode.window.showErrorMessage(
-          `Vale: Failed to restart Language Server - ${detail}`
+        valeOutputChannel.appendLine(
+          `[diagnostics] Restart failed: ${formatError(error)}`
         );
+        showCommandError("Failed to restart Language Server", error);
       }
     }
   );
