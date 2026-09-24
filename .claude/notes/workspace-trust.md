@@ -175,6 +175,6 @@ its expected diagnostic.
 *destination* path for the (already trust-gated) vocabulary-add commands,
 not something that changes what executes.
 
-`vale.install`'s command contribution in `package.json` has no matching
-`vscode.commands.registerCommand` anywhere in `src/` - it's a pre-existing
-dead declaration, unrelated to this change, left alone to avoid scope creep.
+`vale.install`'s command contribution in `package.json` never had a matching
+`vscode.commands.registerCommand` in `src/`. It was removed in 1.3.1 once the
+integration test started asserting every declared command is registered.

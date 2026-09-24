@@ -26,10 +26,12 @@ jobs:
         run: npm run lint
       - name: Test
         run: npm test
-      - name: Extension host smoke test
-        run: xvfb-run -a npm run test:integration
+      # The smoke test activates the extension, which loads the bundled
+      # dist/extension.js ("main"), so the bundle must exist first.
       - name: Webpack (production bundle)
         run: npm run webpack
+      - name: Extension host smoke test
+        run: xvfb-run -a npm run test:integration
       - name: Package extension
         run: npm run package
 

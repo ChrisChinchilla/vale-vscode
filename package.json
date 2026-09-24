@@ -18,7 +18,7 @@
   "sponsor": {
     "url": "https://github.com/sponsors/ChrisChinchilla"
   },
-  "version": "1.3.0",
+  "version": "1.3.1",
   "engines": {
     "vscode": "^1.109.0",
     "node": "^22.13.0 || >=24.0.0"
@@ -53,11 +53,6 @@
         "command": "vale.sync",
         "title": "Vale: Sync",
         "icon": "$(sync)"
-      },
-      {
-        "command": "vale.install",
-        "title": "Vale: Install or Update Vale",
-        "icon": "$(cloud-download)"
       },
       {
         "command": "vale.restartLanguageServer",
