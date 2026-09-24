@@ -20,7 +20,30 @@ export async function run(): Promise<void> {
     capabilities?: {
       untrustedWorkspaces?: { restrictedConfigurations?: string[] };
     };
+    contributes?: { commands?: { command: string }[] };
   };
+
+  // Regression test for #129: an exception during startup diagnostics (the
+  // libc detection added for #123, or the active-client bookkeeping) used to
+  // silently abort activate() *before* registerCommands() ran, leaving every
+  // `vale.*` command reporting "command not found" with no visible error.
+  // Activation succeeding here doesn't by itself prove that ordering is
+  // still correct if the code regresses back to registering commands last -
+  // it only catches the regression when startup diagnostics actually throw
+  // in this environment, which the CI extension host may not reproduce. The
+  // command-registration assertion below is the part that would still catch
+  // a reordering regression even without such a throw.
+  await extension.activate();
+  assert.ok(extension.isActive, "extension should report itself active");
+  const registeredCommands = new Set(await vscode.commands.getCommands(true));
+  const declaredCommands = manifest.contributes?.commands ?? [];
+  assert.ok(declaredCommands.length > 0, "package.json should declare commands");
+  for (const { command } of declaredCommands) {
+    assert.ok(
+      registeredCommands.has(command),
+      `${command} should be registered after activation`
+    );
+  }
   assert.deepEqual(
     manifest.extensionKind,
     ["workspace"],

@@ -20,27 +20,12 @@ import { registerCodeActions } from "./codeActions";
  */
 export async function activate(context: ExtensionContext): Promise<void> {
   const output = createValeOutputChannel(context);
-  createReadabilitySurfaces(context);
-  // The status bar item reflects a single on-demand Show Metrics run, so
-  // switching files makes it stale - hide it until re-run for the new file.
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => clearReadabilityResult())
-  );
-  const libcFamily = await detectLibcFamily();
-  const libcVersion = await detectLibcVersion();
-  const libc = libcFamily
-    ? `${libcFamily}${libcVersion ? ` ${libcVersion}` : ""}`
-    : "not detected";
-  output.appendLine(
-    `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; libc: ${libc}; trusted: ${vscode.workspace.isTrusted}`
-  );
 
-  // Prevent multiple activations - stop existing clients if present
-  if (hasActiveClients()) {
-    console.log("Vale language clients already active, stopping existing clients");
-    await stopAllClients();
-  }
-
+  // Register commands and code actions before any of the startup
+  // diagnostics below, so an exception there can't leave every `vale.*`
+  // command reporting "command not found" with no visible error and an
+  // empty output channel - see
+  // https://github.com/ChrisChinchilla/vale-vscode/issues/129.
   let watchersRegistered = false;
   const startLanguageServer = async () => {
     const serverPath = await ensureLanguageServerBinary(context);
@@ -51,9 +36,43 @@ export async function activate(context: ExtensionContext): Promise<void> {
       watchersRegistered = true;
     }
   };
-
   registerCommands(context, startLanguageServer);
   registerCodeActions(context);
+
+  try {
+    createReadabilitySurfaces(context);
+    // The status bar item reflects a single on-demand Show Metrics run, so
+    // switching files makes it stale - hide it until re-run for the new file.
+    context.subscriptions.push(
+      vscode.window.onDidChangeActiveTextEditor(() => clearReadabilityResult())
+    );
+    const libcFamily = await detectLibcFamily();
+    const libcVersion = await detectLibcVersion();
+    const libc = libcFamily
+      ? `${libcFamily}${libcVersion ? ` ${libcVersion}` : ""}`
+      : "not detected";
+    output.appendLine(
+      `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; libc: ${libc}; trusted: ${vscode.workspace.isTrusted}`
+    );
+
+    // Prevent multiple activations - stop existing clients if present
+    if (hasActiveClients()) {
+      console.log("Vale language clients already active, stopping existing clients");
+      await stopAllClients();
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    output.appendLine(`[diagnostics] Startup diagnostics failed: ${detail}`);
+    output.show(true);
+    vscode.window.showErrorMessage(`Vale: ${detail}`, "Show Diagnostics").then(
+      (choice) => {
+        if (choice === "Show Diagnostics") output.show(true);
+      }
+    );
+    // Commands are already registered above, so the user can still run
+    // "Vale: Restart Language Server" to retry once the underlying problem
+    // (visible in this message and in the output channel) is fixed.
+  }
 
   console.log("Starting language server(s)");
   try {

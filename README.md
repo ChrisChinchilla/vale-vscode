@@ -130,6 +130,8 @@ If no problems appear, work through these checks:
 
 If Vale cannot start, or the CLI works but the extension does not, run **Vale: Show Diagnostics** to inspect the executable mode, paths, and startup errors. If the extension cannot find the executable, set `vale.valeCLI.path` to its absolute path in the extension host's environment. After fixing the issue, run **Vale: Restart Language Server** to retry installation if needed and restart the clients.
 
+If a **Vale** command itself reports "command not found," the extension failed to activate rather than to start Vale - `vale.valeCLI.path` and `Show Diagnostics` won't help since no command is registered yet. Open the Output panel's channel dropdown and select **Log (Extension Host)** (not "Vale," which won't exist yet either) for the activation error, or check **Help: Toggle Developer Tools**'s console. Include that error when reporting the issue.
+
 If the problem persists, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues) with your editor and extension versions, Vale version, operating system, whether you use Docker or a remote workspace, relevant diagnostic output, and a minimal configuration and sample file that reproduce it. Remove sensitive paths or content before sharing.
 
 ## Settings
