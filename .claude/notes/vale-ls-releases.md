@@ -1,6 +1,6 @@
 # vale-ls release pinning and checksums
 
-`src/utils.ts` hardcodes `LSP_TAG` (currently `v0.5.0`) and an
+`src/utils.ts` hardcodes `LSP_TAG` (currently `v0.6.0`) and an
 `EXPECTED_CHECKSUMS` map of SHA-256 digests, one per platform/arch release
 asset. `downloadLSP` in `src/lsp.ts` refuses to install a binary whose
 downloaded bytes don't match the recorded digest for its filename — this is
@@ -11,9 +11,9 @@ extension's own install directory).
 ## Why hardcoded checksums instead of an upstream checksums file
 
 `vale-cli/vale-ls` releases do not currently publish a `SHA256SUMS` file, but
-GitHub's release API publishes a SHA-256 digest for each asset. The v0.5.0
+GitHub's release API publishes a SHA-256 digest for each asset. The v0.6.0
 values were taken from
-`gh api repos/vale-cli/vale-ls/releases/tags/v0.5.0` and embedded in source,
+`gh api repos/vale-cli/vale-ls/releases/tags/v0.6.0` and embedded in source,
 so a compromised or corrupted download is rejected before extraction.
 
 ## Bumping `LSP_TAG`

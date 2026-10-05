@@ -17,6 +17,7 @@ export interface ValeInitializationOptions {
   filter: string;
   installVale: boolean;
   valeBinaryPath: string;
+  noGlobal: boolean;
 }
 
 /**
@@ -89,5 +90,6 @@ export function buildValeConfig(
       ? false
       : configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
     valeBinaryPath: valeBinaryPath ?? "",
+    noGlobal: configuration.get<boolean>("vale.valeCLI.noGlobal") ?? false,
   };
 }

@@ -55,6 +55,7 @@
   - `vale.readabilityProblemLocation` - the same command now computes a Flesch-Kincaid grade from `vale ls-metrics`' counts (`getFileMetrics`/`computeFleschKincaidGrade`) and displays it per this setting via a status bar item and/or a Problems-view diagnostic (`showReadabilityResult`, `src/ui.ts`). This is on-demand (re-run the command to refresh), not continuous background linting, and doesn't gate on the file having a `Readability`/`metric` style configured - it always computes from the raw counts.
 
   Note: `vale.valeCLI.lintOnChange`, `vale.valeCLI.debounceMs`, and `vale.valeCLI.showMetrics` were found to be no-ops too (no `src/` references) during this work, but weren't part of the original audited list - not touched here.
+- [x] **Add a `vale.valeCLI.noGlobal` setting.** [Issue #132](https://github.com/ChrisChinchilla/vale-vscode/issues/132): Vale merged the user-level `.vale.ini` into every project's configuration with no way to stop it. Added `vale.valeCLI.noGlobal`, sent to vale-ls (v0.6.0+, `LSP_TAG` bumped) as `noGlobal` and passed as `--no-global` to the extension's own direct CLI calls via `buildValeConfigArgs`. See `.claude/notes/no-global.md`.
 
 ## UI and layout proposal
 

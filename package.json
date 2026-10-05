@@ -123,6 +123,12 @@
           "default": null,
           "description": "Absolute or relative path to a Vale config file. Supports ~, ${workspaceFolder}, ${userHome}, and ${env:VAR}. If not specified, the default search process is used (relative to the current file)."
         },
+        "vale.valeCLI.noGlobal": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "description": "Pass `--no-global` to every Vale call so that Vale ignores the user-level `.vale.ini` instead of merging it into the project configuration."
+        },
         "vale.valeCLI.syncOnStartup": {
           "scope": "resource",
           "type": "boolean",

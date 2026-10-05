@@ -9,7 +9,7 @@ import * as path from "node:path";
  * VS Code extension host.
  */
 
-export const LSP_TAG = "v0.5.0";
+export const LSP_TAG = "v0.6.0";
 
 /**
  * SHA-256 digests for every vale-ls ${LSP_TAG} release archive, computed
@@ -19,17 +19,17 @@ export const LSP_TAG = "v0.5.0";
  */
 export const EXPECTED_CHECKSUMS: Record<string, string> = {
   "vale-ls-aarch64-apple-darwin.zip":
-    "162ee7e8fce0ef88f263777c216a0bd94a384f058ae54ba68fc9bbcdbaab82bb",
+    "ff0ffde21a5f5505aa1fc5eeb31accc4b3867c4968df5ff1d8e7d86d970c754e",
   "vale-ls-aarch64-pc-windows-msvc.zip":
-    "47200d1acc38558dc9cf0eb8a6c0273e4b288079f7d577b00a73b06b9d022a32",
+    "113ffc80b115e4463ec970906b7674810480f4157ff5c963a14624bf40a3866b",
   "vale-ls-aarch64-unknown-linux-gnu.zip":
-    "1a081f1d145faaad06982ad7292336173fb7ebc5eda574e294354f624ccd03fe",
+    "52365d397d2935d5e2865b381689efcbf4bde00df29e787d35214868f92cca17",
   "vale-ls-x86_64-apple-darwin.zip":
-    "369f2b1075ed2b7a4f1b83f2e496d8a01efe4410a9e614acac1b487bc06b466b",
+    "af4885d9d844b327a2fdc42a1bae899a84fb51b5ac8b59081d00ad1eb418015a",
   "vale-ls-x86_64-pc-windows-gnu.zip":
-    "762cf3c285c18c0a9c4b49ffcd8af963891152512a25aff49985c966e43af025",
+    "1489bd362333b8a26b1442fb2709da9ef5e998c116ccad06dc45f3e89030f20c",
   "vale-ls-x86_64-unknown-linux-gnu.zip":
-    "1feaa606013579d170b3ba1af4bc26fe9e281d803e6d0a73c0b7c1bea9ca0917",
+    "1cf1c3dc56554b2fbf9df8795fa99e1cbf6abf76ab99e801346ee683ad18bc73",
 };
 
 /**
@@ -463,9 +463,20 @@ export function isVersionAtLeast(
  * *does* send `configPath` to vale-ls) worked but these commands silently
  * used the wrong (or no) config and failed. See
  * https://github.com/ChrisChinchilla/vale-vscode/issues/100.
+ *
+ * `noGlobal` adds `--no-global` (`vale.valeCLI.noGlobal`), matching what
+ * vale-ls does for its own calls. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/132.
  */
-export function buildValeConfigArgs(configPath: string): string[] {
-  return configPath ? ["--config", configPath] : [];
+export function buildValeConfigArgs(
+  configPath: string,
+  noGlobal = false
+): string[] {
+  return [
+    ...(configPath ? ["--config", configPath] : []),
+    // Stops Vale merging the user-level .vale.ini into the project config.
+    ...(noGlobal ? ["--no-global"] : []),
+  ];
 }
 
 /**
