@@ -15,7 +15,8 @@ export async function addToVocabulary(
   fileName: "accept.txt" | "reject.txt",
   workspaceRoot: string,
   execution: ValeExecutionOptions,
-  configPath = ""
+  configPath = "",
+  noGlobal = false
 ): Promise<void> {
   if (/[\\/]/.test(vocabularyName) || vocabularyName.trim() !== vocabularyName) {
     throw new Error(
@@ -32,7 +33,8 @@ export async function addToVocabulary(
   const stylesPath = await getStylesPathsFromVale(
     workspaceRoot,
     execution,
-    configPath
+    configPath,
+    noGlobal
   );
 
   if (!stylesPath) {

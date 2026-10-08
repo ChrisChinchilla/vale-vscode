@@ -114,11 +114,12 @@ export async function getValeVersionOutput(
 export async function getStylesPathsFromVale(
   workspaceRoot: string,
   execution: ValeExecutionOptions,
-  configPath = ""
+  configPath = "",
+  noGlobal = false
 ): Promise<string | null> {
   return new Promise((resolve) => {
     const valeProcess = spawnVale(
-      [...buildValeConfigArgs(configPath), "ls-config"],
+      [...buildValeConfigArgs(configPath, noGlobal), "ls-config"],
       workspaceRoot,
       execution
     );
@@ -173,11 +174,12 @@ export async function getFileMetrics(
   filePath: string,
   workspaceRoot: string,
   execution: ValeExecutionOptions,
-  configPath = ""
+  configPath = "",
+  noGlobal = false
 ): Promise<ValeFileMetrics | null> {
   return new Promise((resolve) => {
     const valeProcess = spawnVale(
-      [...buildValeConfigArgs(configPath), "ls-metrics", filePath],
+      [...buildValeConfigArgs(configPath, noGlobal), "ls-metrics", filePath],
       workspaceRoot,
       execution
     );

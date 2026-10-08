@@ -85,7 +85,7 @@ The extension starts a separate Vale Language Server instance per workspace fold
 - Commands run from the **Vale** panel or command palette (**Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary commands) act on the workspace folder containing the currently active file, not always the first folder in the workspace.
 - Adding or removing a folder from the workspace starts or stops its Vale Language Server instance automatically, without needing to reload the window.
 
-Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck`, `vale.valeCLI.minAlertLevel`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, `vale.valeCLI.installVale`, `vale.valeCLI.path`, `vale.docker.enabled`, `vale.docker.image`, `vale.docker.extraArgs`) restarts the affected folder's server instance automatically, without needing to reload the window.
+Changing a setting that affects the Vale Language Server (`vale.enableSpellcheck`, `vale.valeCLI.minAlertLevel`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, `vale.valeCLI.installVale`, `vale.valeCLI.noGlobal`, `vale.valeCLI.path`, `vale.docker.enabled`, `vale.docker.image`, `vale.docker.extraArgs`) restarts the affected folder's server instance automatically, without needing to reload the window.
 
 ### Using Vale via Docker
 
@@ -138,6 +138,7 @@ The extension offers a number of settings and configuration options (_Preference
 
 - `vale.valeCLI.installVale` (default: `false`): Install Vale automatically if not found on the system.
 - `vale.valeCLI.config` (default: `null`): Absolute or relative path to a Vale configuration file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`.
+- `vale.valeCLI.noGlobal` (default: `false`): Pass `--no-global` to every Vale call (linting, **Vale: Sync**, **Vale: Show Configuration**, readability metrics, and vocabulary lookups) so that Vale ignores the user-level `.vale.ini` instead of merging it into the project configuration. Requires vale-ls v0.6.0 or later, which the extension installs.
 - `vale.valeCLI.minAlertLevel` (default: `inherited`): Defines from which level of errors and above to display in the problems view.
 - `vale.doNotShowWarningForFileToBeSavedBeforeLinting` (default: `false`): **Vale: Show Readability Metrics** reads the file from disk, so it warns and offers to save first when the active file has unsaved changes. Set to `true` to skip that dialog.
 - `vale.readabilityProblemLocation` (default: `status`): Where **Vale: Show Readability Metrics** displays the Flesch-Kincaid grade level it computes: the status bar (`status`), the problems view (`inline`), or both (`both`).

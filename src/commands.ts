@@ -125,6 +125,7 @@ interface CommandContext {
   configuration: vscode.WorkspaceConfiguration;
   execution: ValeExecutionOptions;
   configPath: string;
+  noGlobal: boolean;
   workingDir: string;
 }
 
@@ -149,9 +150,10 @@ async function resolveCommandContext(
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
   const execution = resolveCommandExecution(configuration, folder?.uri.fsPath, context);
   const configPath = resolveCommandConfigPath(configuration, folder?.uri.fsPath);
+  const noGlobal = configuration.get<boolean>("vale.valeCLI.noGlobal") ?? false;
   const workingDir = folder?.uri.fsPath ?? fallbackWorkingDir;
 
-  return { folder, configuration, execution, configPath, workingDir };
+  return { folder, configuration, execution, configPath, noGlobal, workingDir };
 }
 
 /**
@@ -206,7 +208,8 @@ export function registerCommands(
           fileName,
           cmdContext.workingDir,
           cmdContext.execution,
-          cmdContext.configPath
+          cmdContext.configPath,
+          cmdContext.noGlobal
         );
       } catch (error) {
         showCommandError("Failed to add word", error);
@@ -235,7 +238,7 @@ export function registerCommands(
       valeOutputChannel.appendLine("\nRunning vale sync...\n");
 
       await runValeCommand(
-        [...buildValeConfigArgs(cmdContext.configPath), "sync"],
+        [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "sync"],
         cmdContext.workingDir,
         cmdContext.execution
       );
@@ -265,7 +268,7 @@ export function registerCommands(
         valeOutputChannel.appendLine("\nRunning vale ls-config...\n");
 
         await runValeCommand(
-          [...buildValeConfigArgs(cmdContext.configPath), "ls-config"],
+          [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "ls-config"],
           cmdContext.workingDir,
           cmdContext.execution
         );
@@ -306,7 +309,8 @@ export function registerCommands(
           filePath,
           cmdContext.workingDir,
           cmdContext.execution,
-          cmdContext.configPath
+          cmdContext.configPath,
+          cmdContext.noGlobal
         );
 
         if (!metrics) {

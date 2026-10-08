@@ -175,6 +175,21 @@ describe("buildValeConfigArgs", () => {
       ["--config", "/workspace/src/config/.vale.ini"]
     );
   });
+
+  test("returns --no-global alone when noGlobal is set without a config path", () => {
+    assert.deepEqual(buildValeConfigArgs("", true), ["--no-global"]);
+  });
+
+  test("returns --config and --no-global together", () => {
+    assert.deepEqual(
+      buildValeConfigArgs("/workspace/.vale.ini", true),
+      ["--config", "/workspace/.vale.ini", "--no-global"]
+    );
+  });
+
+  test("omits --no-global when noGlobal is false", () => {
+    assert.deepEqual(buildValeConfigArgs("", false), []);
+  });
 });
 
 describe("buildValeFilterExpression", () => {

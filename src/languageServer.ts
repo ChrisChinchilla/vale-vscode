@@ -547,6 +547,7 @@ const VALE_CONFIG_SETTINGS = [
   "vale.valeCLI.config",
   "vale.valeCLI.syncOnStartup",
   "vale.valeCLI.installVale",
+  "vale.valeCLI.noGlobal",
   "vale.valeCLI.path",
   "vale.docker.enabled",
   "vale.docker.image",
