@@ -85,6 +85,7 @@ The current settings appear lexicographically because they have no explicit orde
 
 ### Additional UI improvements
 
+- [ ] **Medium: reorganise the settings UI.** Implement the proposed layout above: group settings into **Setup**, **Linting**, **Vocabulary**, and **Advanced** categories (multiple `contributes.configuration` objects with a `title` and `order`), with explicit per-setting `order`. Overlaps with the description, default, and enum-label items below; do those as part of this work.
 - [ ] Replace `null` string defaults with valid empty-string defaults.
 - [ ] Add explicit order, concise Markdown descriptions, links, integer bounds, and readable enum labels.
 - [ ] Add native commands for **Select Configuration File** and **Open Vale Settings**. **Restart Language Server** is now implemented.
