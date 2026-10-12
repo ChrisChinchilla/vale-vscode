@@ -19,6 +19,9 @@ import {
   parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
+  buildValeConfigArgs,
+  formatProbeResult,
+  isProbeSuccessful,
   capDiagnostics,
   isUnsupportedLinuxLibc,
   resolveValeBinaryPath,
@@ -33,7 +36,7 @@ import {
   getWindowsDockerProxy,
 } from "./docker";
 import { getValeOutputChannel } from "./ui";
-import { getValeVersionOutput } from "./cli";
+import { getValeVersionOutput, probeExecutable } from "./cli";
 
 import {
   ExecuteCommandRequest,
@@ -159,6 +162,56 @@ async function warnIfValeTooOldForFilters(
   vscode.window.showWarningMessage(`Vale: ${message}`);
 }
 
+let languageServerChannel: vscode.LogOutputChannel | undefined;
+
+function getLanguageServerChannel(context: ExtensionContext): vscode.LogOutputChannel {
+  if (!languageServerChannel) {
+    languageServerChannel = vscode.window.createOutputChannel(
+      "Vale Language Server",
+      { log: true }
+    );
+    context.subscriptions.push(languageServerChannel);
+  }
+  return languageServerChannel;
+}
+
+/**
+ * Runs the Docker wrapper (or proxy) once with `--version` and `ls-config`
+ * and logs exit code/stdout/stderr. Without this a container failure
+ * (podman short-name prompts, SELinux denying the bind mount, a missing
+ * `docker` binary) only surfaces as vale-ls's `expected value at line 1
+ * column 1` JSON parse error. Not awaited by the caller - the first run
+ * can include an image pull. See
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/129.
+ */
+async function logDockerPreflight(
+  command: string,
+  workingDir: string,
+  env: NodeJS.ProcessEnv,
+  configPath: string,
+  noGlobal: boolean
+): Promise<void> {
+  const options = { cwd: workingDir, env };
+  const probes: [string, string[]][] = [
+    ["docker preflight `--version`", ["--version"]],
+    [
+      "docker preflight `ls-config`",
+      [...buildValeConfigArgs(configPath, noGlobal), "ls-config"],
+    ],
+  ];
+  for (const [label, args] of probes) {
+    const result = await probeExecutable(command, args, options);
+    for (const line of formatProbeResult(label, result)) logDiagnostic(line);
+    if (!isProbeSuccessful(result)) {
+      logDiagnostic(
+        "Docker mode preflight failed; vale-ls will report an unhelpful JSON parse error until this is fixed."
+      );
+      getValeOutputChannel().show(true);
+      return;
+    }
+  }
+}
+
 export function getArch(): string | null {
   const arch = detectArch(process.arch);
   if (arch === null) {
@@ -281,7 +334,9 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
 export async function ensureLanguageServerBinary(
   context: ExtensionContext
 ): Promise<string> {
-  const libcFamily = await detectLibcFamily();
+  // detect-libc can throw inside the extension host (see issue #129); treat
+  // that as "undetermined", which isUnsupportedLinuxLibc deliberately allows.
+  const libcFamily = await detectLibcFamily().catch(() => null);
   if (isUnsupportedLinuxLibc(process.platform, libcFamily)) {
     throw new Error(
       "Vale Language Server publishes glibc Linux binaries only, but this environment appears to use musl libc (common in Alpine containers). Use a glibc-based devcontainer image."
@@ -404,6 +459,17 @@ export async function startClientForFolder(
   logDiagnostic(
     `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
   );
+  if (execution.docker && valeBinaryPath) {
+    void logDockerPreflight(
+      valeBinaryPath,
+      workspaceRoot ?? process.cwd(),
+      execution.docker.proxyPath && workspaceRoot
+        ? buildDockerProxyEnvironment(execution.docker, workspaceRoot)
+        : process.env,
+      valeConfig.configPath,
+      valeConfig.noGlobal
+    );
+  }
   await warnIfValeTooOldForFilters(
     workspaceRoot ?? process.cwd(),
     execution,
@@ -443,6 +509,12 @@ export async function startClientForFolder(
       fileEvents: workspace.createFileSystemWatcher(fileWatcherPattern),
     },
     workspaceFolder: folder,
+    // One shared channel for server logs and `vale.trace.server` traffic,
+    // instead of a per-client channel named after the workspace folder.
+    // It has to be a log channel (the client requires one), which is why it
+    // isn't merged into the plain "Vale" channel.
+    outputChannel: getLanguageServerChannel(context),
+    traceOutputChannel: getLanguageServerChannel(context),
     middleware: {
       // vale-ls's own `fix`-RPC-based quick fixes for `replace` alerts are
       // superseded by ValeSubstitutionCodeActionProvider (registered

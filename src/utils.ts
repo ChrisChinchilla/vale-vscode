@@ -365,6 +365,59 @@ export function buildDockerWrapperScript(
   return `#!/usr/bin/env bash\nset -e\nexec docker ${dockerArgs} "$@"\n`;
 }
 
+/** Outcome of running one diagnostic probe command (see `probeExecutable` in `cli.ts`). */
+export interface ProbeResult {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  /** Set when the process couldn't be spawned at all (e.g. `ENOENT`). */
+  spawnError?: string;
+  timedOut?: boolean;
+}
+
+const MAX_PROBE_OUTPUT_LENGTH = 1000;
+
+function truncateProbeOutput(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > MAX_PROBE_OUTPUT_LENGTH
+    ? `${trimmed.slice(0, MAX_PROBE_OUTPUT_LENGTH)}... (truncated)`
+    : trimmed;
+}
+
+/**
+ * Renders a probe result as Output-channel lines. Docker/Podman failures
+ * otherwise reach the user only as vale-ls's own `expected value at line 1
+ * column 1` JSON parse error, hiding the real stderr - see
+ * https://github.com/ChrisChinchilla/vale-vscode/issues/129.
+ */
+export function formatProbeResult(label: string, result: ProbeResult): string[] {
+  if (result.spawnError) {
+    return [`${label}: could not start (${result.spawnError})`];
+  }
+  if (result.timedOut) {
+    return [`${label}: timed out`];
+  }
+  const lines = [`${label}: exit code ${result.exitCode}`];
+  const stdout = truncateProbeOutput(result.stdout);
+  const stderr = truncateProbeOutput(result.stderr);
+  if (stdout) lines.push(`${label} stdout: ${stdout}`);
+  if (stderr) lines.push(`${label} stderr: ${stderr}`);
+  if (result.exitCode === 0 && !stdout) {
+    lines.push(`${label}: succeeded but produced no output`);
+  }
+  return lines;
+}
+
+/** True when a probe ran and exited 0 with non-empty stdout. */
+export function isProbeSuccessful(result: ProbeResult): boolean {
+  return (
+    !result.spawnError &&
+    !result.timedOut &&
+    result.exitCode === 0 &&
+    result.stdout.trim().length > 0
+  );
+}
+
 /**
  * The subset of vale-ls's raw alert JSON (see its `ValeAlert`/`ValeAction`
  * structs) that we need. vale-ls attaches this as each diagnostic's LSP
