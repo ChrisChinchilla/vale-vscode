@@ -4,6 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import {
+  formatProbeResult,
+  isProbeSuccessful,
   EXPECTED_CHECKSUMS,
   SharedRegistry,
   buildDockerRunArgs,
@@ -812,5 +814,35 @@ describe("SharedRegistry", () => {
     registry.release("vale");
     registry.release("vale");
     assert.equal(registry.has("cli.sync"), false);
+  });
+});
+
+describe("formatProbeResult / isProbeSuccessful", () => {
+  test("reports spawn errors", () => {
+    const result = { exitCode: null, stdout: "", stderr: "", spawnError: "spawn docker ENOENT" };
+    assert.deepEqual(formatProbeResult("probe", result), [
+      "probe: could not start (spawn docker ENOENT)",
+    ]);
+    assert.equal(isProbeSuccessful(result), false);
+  });
+
+  test("includes stderr for a failing run", () => {
+    const result = { exitCode: 125, stdout: "", stderr: "Error: short-name resolution\n" };
+    assert.deepEqual(formatProbeResult("probe", result), [
+      "probe: exit code 125",
+      "probe stderr: Error: short-name resolution",
+    ]);
+    assert.equal(isProbeSuccessful(result), false);
+  });
+
+  test("flags an exit-0 run with no output", () => {
+    const result = { exitCode: 0, stdout: "", stderr: "" };
+    assert.ok(formatProbeResult("probe", result).some((l) => l.includes("no output")));
+    assert.equal(isProbeSuccessful(result), false);
+  });
+
+  test("accepts a normal run", () => {
+    const result = { exitCode: 0, stdout: "vale version 3.0.0\n", stderr: "" };
+    assert.equal(isProbeSuccessful(result), true);
   });
 });

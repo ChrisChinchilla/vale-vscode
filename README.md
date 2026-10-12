@@ -128,6 +128,8 @@ If no problems appear, work through these checks:
 4. **Check diagnostic settings.** Make sure `vale.valeCLI.minAlertLevel` does not hide the alerts you expect. For spelling alerts, enable `vale.enableSpellcheck` and a spelling style in your Vale configuration.
 5. **Try Vale directly.** For a local Vale installation, run `vale --version` and `vale path/to/your-file.md` from the workspace folder, using the same executable and configuration as the extension. In a remote workspace, run these commands inside that environment. If the CLI also fails, resolve its installation or configuration error first.
 
+With Docker mode enabled, the **Vale** output channel also logs the exit code and output of a `--version` and `ls-config` run through the Docker wrapper at startup, which shows the real container error behind vale-ls's `expected value at line 1 column 1` message.
+
 If Vale cannot start, or the CLI works but the extension does not, run **Vale: Show Diagnostics** to inspect the executable mode, paths, and startup errors. If the extension cannot find the executable, set `vale.valeCLI.path` to its absolute path in the extension host's environment. After fixing the issue, run **Vale: Restart Language Server** to retry installation if needed and restart the clients.
 
 If the problem persists, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues) with your editor and extension versions, Vale version, operating system, whether you use Docker or a remote workspace, relevant diagnostic output, and a minimal configuration and sample file that reproduce it. Remove sensitive paths or content before sharing.
@@ -156,7 +158,7 @@ The extension offers a number of settings and configuration options (_Preference
 
 ### Advanced and debugging settings
 
-- `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server in the output panel. Set to `messages` or `verbose` when reporting a bug.
+- `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server. Output appears in the **Vale Language Server** output channel, separate from **Vale**. Set to `messages` or `verbose` when reporting a bug.
 - `vale.maxNumberOfProblems` (default: `100`): Caps the number of problems shown per file. Applied client-side (vale-ls itself has no such limit), so the file is still linted in full - only what's displayed is trimmed. Set to `0` for no limit.
 
 ## Changelog

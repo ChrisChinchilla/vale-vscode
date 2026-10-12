@@ -26,11 +26,20 @@ export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(() => clearReadabilityResult())
   );
-  const libcFamily = await detectLibcFamily();
-  const libcVersion = await detectLibcVersion();
-  const libc = libcFamily
-    ? `${libcFamily}${libcVersion ? ` ${libcVersion}` : ""}`
-    : "not detected";
+  // Purely informational, so a failure here must never abort activation (and
+  // with it command registration): detect-libc's version lookup reads
+  // `process.report.getReport().header`, and `getReport()` returns undefined
+  // inside the extension host on some systems. See issue #129.
+  let libc = "not detected";
+  try {
+    const libcFamily = await detectLibcFamily();
+    if (libcFamily) {
+      const libcVersion = await detectLibcVersion().catch(() => null);
+      libc = `${libcFamily}${libcVersion ? ` ${libcVersion}` : ""}`;
+    }
+  } catch (error) {
+    libc = `detection failed (${error instanceof Error ? error.message : String(error)})`;
+  }
   output.appendLine(
     `[diagnostics] Extension host: ${vscode.env.remoteName ?? "local"}; platform: ${process.platform}/${process.arch}; libc: ${libc}; trusted: ${vscode.workspace.isTrusted}`
   );

@@ -6,7 +6,7 @@ import {
   buildValeConfigArgs,
   buildValeSpawnOptions,
 } from "./utils";
-import type { ValeExecutionOptions } from "./utils";
+import type { ProbeResult, ValeExecutionOptions } from "./utils";
 import { getValeOutputChannel } from "./ui";
 
 /**
@@ -227,4 +227,42 @@ export interface ValeFileMetrics {
   complex_words?: number;
   long_words?: number;
   polysyllabic_words?: number;
+}
+
+/**
+ * Runs `command` once and captures its exit code and output, never
+ * rejecting. Used to preflight Docker mode's wrapper script so a container
+ * failure shows up in the Output channel with its stderr.
+ */
+export function probeExecutable(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv },
+  timeoutMs = 120_000
+): Promise<ProbeResult> {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (result: ProbeResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
+    // Image pulls on first use can be slow, so this is deliberately generous.
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ exitCode: null, stdout, stderr, timedOut: true });
+    }, timeoutMs);
+
+    child.stdout.on("data", (data) => (stdout += data.toString()));
+    child.stderr.on("data", (data) => (stderr += data.toString()));
+    child.on("error", (err) =>
+      finish({ exitCode: null, stdout, stderr, spawnError: err.message })
+    );
+    child.on("close", (code) => finish({ exitCode: code, stdout, stderr }));
+  });
 }
