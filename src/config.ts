@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   buildValeFilterExpression,
   resolveConfigPath,
+  resolveEditorBehaviorOptions,
   resolveValeBinaryPath,
   resolveValeExecutionSettings,
 } from "./utils";
@@ -18,6 +19,9 @@ export interface ValeInitializationOptions {
   installVale: boolean;
   valeBinaryPath: string;
   noGlobal: boolean;
+  lintOnChange: boolean;
+  debounceMs: number;
+  showMetrics: boolean;
 }
 
 /**
@@ -91,5 +95,10 @@ export function buildValeConfig(
       : configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
     valeBinaryPath: valeBinaryPath ?? "",
     noGlobal: configuration.get<boolean>("vale.valeCLI.noGlobal") ?? false,
+    ...resolveEditorBehaviorOptions({
+      lintOnChange: configuration.get<boolean>("vale.valeCLI.lintOnChange"),
+      debounceMs: configuration.get<number>("vale.valeCLI.debounceMs"),
+      showMetrics: configuration.get<boolean>("vale.valeCLI.showMetrics"),
+    }),
   };
 }

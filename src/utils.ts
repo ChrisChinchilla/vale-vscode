@@ -22,6 +22,33 @@ export const VALE_CONFIG_FILE_PATTERNS = [
   ".config/vale.ini",
 ];
 
+/** Default `vale.valeCLI.debounceMs`; matches vale-ls's own fallback. */
+export const DEFAULT_DEBOUNCE_MS = 300;
+
+/**
+ * Normalises the editor-behaviour settings sent to vale-ls
+ * (`lintOnChange`, `debounceMs`, `showMetrics`). vale-ls treats an *absent*
+ * `lintOnChange`/`showMetrics` as on, so they must always be sent explicitly
+ * for the documented `false` defaults to apply. `debounceMs` falls back to
+ * the default unless it is a finite, non-negative number, and is rounded to
+ * a whole millisecond (vale-ls parses it as an unsigned integer).
+ */
+export function resolveEditorBehaviorOptions(raw: {
+  lintOnChange?: boolean;
+  debounceMs?: number;
+  showMetrics?: boolean;
+}): { lintOnChange: boolean; debounceMs: number; showMetrics: boolean } {
+  const debounce = raw.debounceMs;
+  return {
+    lintOnChange: raw.lintOnChange ?? false,
+    debounceMs:
+      typeof debounce === "number" && Number.isFinite(debounce) && debounce >= 0
+        ? Math.round(debounce)
+        : DEFAULT_DEBOUNCE_MS,
+    showMetrics: raw.showMetrics ?? false,
+  };
+}
+
 /** A single workspace-wide glob matching every `VALE_CONFIG_FILE_PATTERNS` entry. */
 export const VALE_CONFIG_FILE_GLOB = `**/{${VALE_CONFIG_FILE_PATTERNS.join(",")}}`;
 

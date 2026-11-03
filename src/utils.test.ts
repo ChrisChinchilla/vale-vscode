@@ -26,6 +26,8 @@ import {
   isVersionAtLeast,
   MIN_VALE_FILTER_VERSION,
   VALE_CONFIG_FILE_GLOB,
+  DEFAULT_DEBOUNCE_MS,
+  resolveEditorBehaviorOptions,
   VALE_CONFIG_FILE_PATTERNS,
   parseValeVersion,
   resolveConfigPath,
@@ -863,5 +865,40 @@ describe("VALE_CONFIG_FILE_GLOB", () => {
       VALE_CONFIG_FILE_GLOB,
       "**/{.vale.ini,_vale.ini,.config/vale.ini}"
     );
+  });
+});
+
+describe("resolveEditorBehaviorOptions", () => {
+  test("defaults to the documented values when nothing is set", () => {
+    assert.deepEqual(resolveEditorBehaviorOptions({}), {
+      lintOnChange: false,
+      debounceMs: DEFAULT_DEBOUNCE_MS,
+      showMetrics: false,
+    });
+  });
+
+  test("passes explicit values through", () => {
+    assert.deepEqual(
+      resolveEditorBehaviorOptions({
+        lintOnChange: true,
+        debounceMs: 750,
+        showMetrics: true,
+      }),
+      { lintOnChange: true, debounceMs: 750, showMetrics: true }
+    );
+  });
+
+  test("rounds fractional debounce and allows zero", () => {
+    assert.equal(resolveEditorBehaviorOptions({ debounceMs: 0 }).debounceMs, 0);
+    assert.equal(resolveEditorBehaviorOptions({ debounceMs: 250.6 }).debounceMs, 251);
+  });
+
+  test("falls back to the default for negative or non-finite debounce", () => {
+    for (const bad of [-1, NaN, Infinity]) {
+      assert.equal(
+        resolveEditorBehaviorOptions({ debounceMs: bad }).debounceMs,
+        DEFAULT_DEBOUNCE_MS
+      );
+    }
   });
 });

@@ -153,9 +153,9 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.docker.enabled` (default: `false`): Run Vale inside a Docker container instead of a local install. See [Using Vale via Docker](#using-vale-via-docker) above.
 - `vale.docker.image` (default: `jdkato/vale`): Docker image to run Vale from.
 - `vale.docker.extraArgs` (default: `[]`): Extra arguments spliced into `docker run` before the image name.
-- `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved.
-- `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled.
-- `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on).
+- `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved. Changing it restarts the language server.
+- `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled. Must be zero or greater.
+- `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on). Requires vale-ls v0.5.0 or later, which the extension installs.
 
 ### Advanced and debugging settings
 

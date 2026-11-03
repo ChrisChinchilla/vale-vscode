@@ -14,12 +14,10 @@ vale-ls defaults: lint-on-change on, debounce 300ms, metrics code lens on.
       `_vale.ini`, `.config/vale.ini`, restart on change. See
       `vale-config-file-watcher.md`. README updated. Needs manual check in a
       real extension host.
-- [ ] Send `lintOnChange`, `debounceMs`, `showMetrics` to vale-ls
-      (`ValeInitializationOptions`/`buildValeConfig`, `VALE_CONFIG_SETTINGS`).
-      They are declared in `package.json` but never sent, so the server's
-      defaults always win (the metrics lens shows even with `showMetrics`
-      false). Open decision: keep the `false` default for `showMetrics` or
-      match the server (shown).
+- [x] Send `lintOnChange`, `debounceMs`, `showMetrics` to vale-ls. Decision:
+      honour the documented defaults (both booleans `false`, debounce 300),
+      which is a behaviour change for existing users (see
+      `editor-behaviour-settings.md`). Needs manual check in a real host.
 - [ ] `Vale: Open Rule in Regex101` via server command `cli.compile` (YAML rule
       files only; editor title/context menu).
 
