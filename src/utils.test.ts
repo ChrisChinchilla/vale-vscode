@@ -25,6 +25,8 @@ import {
   isServerReplaceAction,
   isVersionAtLeast,
   MIN_VALE_FILTER_VERSION,
+  VALE_CONFIG_FILE_GLOB,
+  VALE_CONFIG_FILE_PATTERNS,
   parseValeVersion,
   resolveConfigPath,
   resolveValeBinaryPath,
@@ -844,5 +846,22 @@ describe("formatProbeResult / isProbeSuccessful", () => {
   test("accepts a normal run", () => {
     const result = { exitCode: 0, stdout: "vale version 3.0.0\n", stderr: "" };
     assert.equal(isProbeSuccessful(result), true);
+  });
+});
+
+describe("VALE_CONFIG_FILE_GLOB", () => {
+  test("covers every config location Vale discovers, including .config/vale.ini (3.25.1+)", () => {
+    assert.deepEqual(VALE_CONFIG_FILE_PATTERNS, [
+      ".vale.ini",
+      "_vale.ini",
+      ".config/vale.ini",
+    ]);
+  });
+
+  test("is a single brace-alternation glob over all patterns", () => {
+    assert.equal(
+      VALE_CONFIG_FILE_GLOB,
+      "**/{.vale.ini,_vale.ini,.config/vale.ini}"
+    );
   });
 });

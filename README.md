@@ -72,6 +72,7 @@ The following commands are available from the **Vale** panel in the Explorer sid
 - **Vale: Sync** downloads and updates the packages defined in your `.vale.ini` file. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
 - **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages.
 - **Vale: Show Configuration** runs `vale ls-config` and displays the active Vale configuration in the Vale output panel.
+- The extension watches `.vale.ini`, `_vale.ini` and `.config/vale.ini` (the last supported from Vale 3.25.1) in your workspace. When one is created, changed, or deleted, the Vale language server restarts for that folder so diagnostics in open files refresh without a window reload.
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
 - **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
 - **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures.

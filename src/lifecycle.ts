@@ -7,6 +7,7 @@ import {
   ensureLanguageServerBinary,
   hasActiveClients,
   registerConfigurationWatcher,
+  registerValeConfigFileWatcher,
   registerWorkspaceFolderWatcher,
   startClientsForCurrentWorkspace,
   stopAllClients,
@@ -57,6 +58,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     if (!watchersRegistered) {
       registerWorkspaceFolderWatcher(context, serverPath);
       registerConfigurationWatcher(context, serverPath);
+      registerValeConfigFileWatcher(context, serverPath);
       watchersRegistered = true;
     }
   };

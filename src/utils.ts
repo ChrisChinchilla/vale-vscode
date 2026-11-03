@@ -12,6 +12,20 @@ import * as path from "node:path";
 export const LSP_TAG = "v0.6.0";
 
 /**
+ * Config file locations Vale discovers on its own. `.config/vale.ini` was
+ * added in Vale 3.25.1 (and recognised by vale-ls v0.6.0). Used to watch for
+ * config edits, so keep it in step with Vale's discovery rules.
+ */
+export const VALE_CONFIG_FILE_PATTERNS = [
+  ".vale.ini",
+  "_vale.ini",
+  ".config/vale.ini",
+];
+
+/** A single workspace-wide glob matching every `VALE_CONFIG_FILE_PATTERNS` entry. */
+export const VALE_CONFIG_FILE_GLOB = `**/{${VALE_CONFIG_FILE_PATTERNS.join(",")}}`;
+
+/**
  * SHA-256 digests for every vale-ls ${LSP_TAG} release archive, computed
  * from the published GitHub release assets. These must be updated whenever
  * LSP_TAG changes - see .claude/notes/vale-ls-releases.md for how to

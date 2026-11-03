@@ -10,6 +10,7 @@ import * as path from "path";
 import {
   LSP_TAG,
   MIN_VALE_FILTER_VERSION,
+  VALE_CONFIG_FILE_GLOB,
   buildDownloadAssetName,
   detectArch,
   detectPlatform,
@@ -498,16 +499,9 @@ export async function startClientForFolder(
     ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
     : [{ scheme: "file", language: "*" }];
 
-  const fileWatcherPattern: vscode.GlobPattern = folder
-    ? new vscode.RelativePattern(folder, "**/.clientrc")
-    : "**/.clientrc";
-
   const clientOptions: LanguageClientOptions = {
     initializationOptions: valeConfig,
     documentSelector,
-    synchronize: {
-      fileEvents: workspace.createFileSystemWatcher(fileWatcherPattern),
-    },
     workspaceFolder: folder,
     // One shared channel for server logs and `vale.trace.server` traffic,
     // instead of a per-client channel named after the workspace folder.
@@ -654,5 +648,55 @@ export function registerConfigurationWatcher(
         await startClientForFolder(serverPath, context, undefined);
       }
     })
+  );
+}
+
+/**
+ * Restarts the affected client when a Vale config file (`.vale.ini`,
+ * `_vale.ini`, or `.config/vale.ini`) is created, changed, or deleted.
+ *
+ * vale-ls ignores `workspace/didChangeWatchedFiles` and runs `vale` afresh
+ * for each lint, so a config edit already applies to the *next* lint - what
+ * it can't do is refresh diagnostics already showing in open documents.
+ * Restarting the client re-opens and re-lints them. Rapid bursts of events
+ * (a save that touches several files, branch switches) collapse into one
+ * restart per folder.
+ */
+export function registerValeConfigFileWatcher(
+  context: ExtensionContext,
+  serverPath: string
+): void {
+  const watcher = workspace.createFileSystemWatcher(VALE_CONFIG_FILE_GLOB);
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const restartFor = (uri: vscode.Uri) => {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    // Files outside every workspace folder are only relevant to the
+    // no-folder client.
+    if (!folder && (vscode.workspace.workspaceFolders?.length ?? 0) > 0) {
+      return;
+    }
+    const key = clientKeyFor(folder);
+    clearTimeout(pending.get(key));
+    pending.set(
+      key,
+      setTimeout(() => {
+        pending.delete(key);
+        // Only restart a client that is running; a failed start shouldn't be
+        // retried on every config save.
+        if (!clients.has(key)) return;
+        startClientForFolder(serverPath, context, folder).catch((error) =>
+          console.error("Failed to restart Vale after config change:", error)
+        );
+      }, 500)
+    );
+  };
+
+  context.subscriptions.push(
+    watcher,
+    watcher.onDidCreate(restartFor),
+    watcher.onDidChange(restartFor),
+    watcher.onDidDelete(restartFor),
+    { dispose: () => pending.forEach((timer) => clearTimeout(timer)) }
   );
 }
