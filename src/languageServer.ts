@@ -31,6 +31,7 @@ import {
 import type { ValeExecutionOptions } from "./utils";
 import { buildValeConfig, resolveValeExecutionOptions } from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
+import { ClientLifecycleQueue, usesConfigFile } from "./clientLifecycle";
 import { isServerReplaceFix } from "./codeActions";
 import {
   ensureDockerWrapperScript,
@@ -56,6 +57,7 @@ import {
  * take effect, so collapsing to one client trades that away.
  */
 const clients: Map<string, LanguageClient> = new Map();
+const lifecycle = new ClientLifecycleQueue();
 const VERSION_MARKER_NAME = ".vale-ls-version";
 
 /**
@@ -388,6 +390,10 @@ export function hasActiveClients(): boolean {
  * activation.
  */
 export async function stopAndRemoveClient(key: string): Promise<void> {
+  return lifecycle.run(key, "stop", () => stopClient(key));
+}
+
+async function stopClient(key: string): Promise<void> {
   const existing = clients.get(key);
   if (!existing) {
     return;
@@ -402,7 +408,7 @@ export async function stopAndRemoveClient(key: string): Promise<void> {
 }
 
 export async function stopAllClients(): Promise<void> {
-  await Promise.all(Array.from(clients.keys()).map(stopAndRemoveClient));
+  await Promise.all([...new Set([...clients.keys(), ...lifecycle.keys()])].map(stopAndRemoveClient));
 }
 
 /**
@@ -415,8 +421,16 @@ export async function startClientForFolder(
   context: ExtensionContext,
   folder?: vscode.WorkspaceFolder
 ): Promise<void> {
+  return lifecycle.run(clientKeyFor(folder), "start", () => startClient(serverPath, context, folder));
+}
+
+async function startClient(
+  serverPath: string,
+  context: ExtensionContext,
+  folder?: vscode.WorkspaceFolder
+): Promise<void> {
   const key = clientKeyFor(folder);
-  await stopAndRemoveClient(key);
+  await stopClient(key);
 
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
@@ -672,19 +686,14 @@ export function registerValeConfigFileWatcher(
   const watcher = workspace.createFileSystemWatcher(VALE_CONFIG_FILE_GLOB);
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
-  const restartFor = (uri: vscode.Uri) => {
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    // Files outside every workspace folder are only relevant to the
-    // no-folder client.
-    if (!folder && (vscode.workspace.workspaceFolders?.length ?? 0) > 0) {
-      return;
-    }
+  const scheduleRestart = (folder?: vscode.WorkspaceFolder) => {
     const key = clientKeyFor(folder);
     clearTimeout(pending.get(key));
     pending.set(
       key,
       setTimeout(() => {
         pending.delete(key);
+        if (folder && !workspace.workspaceFolders?.some((current) => clientKeyFor(current) === key)) return;
         // Only restart a client that is running; a failed start shouldn't be
         // retried on every config save.
         if (!clients.has(key)) return;
@@ -693,6 +702,19 @@ export function registerValeConfigFileWatcher(
         );
       }, 500)
     );
+  };
+
+  const restartFor = (uri: vscode.Uri) => {
+    const owner = workspace.getWorkspaceFolder(uri);
+    const folders = workspace.workspaceFolders;
+    const candidates = folders?.length ? folders : [undefined];
+    for (const folder of candidates) {
+      const configuration = workspace.getConfiguration(undefined, folder?.uri);
+      const configPath = buildValeConfig(configuration, folder?.uri.fsPath).configPath;
+      if (folder === owner || usesConfigFile(configPath, folder?.uri.fsPath, uri.fsPath)) {
+        scheduleRestart(folder);
+      }
+    }
   };
 
   context.subscriptions.push(
