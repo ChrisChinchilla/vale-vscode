@@ -522,6 +522,30 @@ export function isServerReplaceAction(data: ValeAlertData | undefined): boolean 
 export const MIN_VALE_FILTER_VERSION: [number, number, number] = [3, 10, 0];
 
 /**
+ * First Vale release that discovers `.config/vale.ini` on its own (3.25.1).
+ * An older Vale silently ignores such a file, so linting would run with no
+ * project configuration.
+ */
+export const MIN_VALE_CONFIG_DIR_VERSION: [number, number, number] = [3, 25, 1];
+
+/** Formats a version tuple as `X.Y.Z`. */
+export function formatValeVersion(version: [number, number, number]): string {
+  return version.join(".");
+}
+
+/**
+ * One-line summary of a `vale --version` probe for the diagnostics log:
+ * `Vale 3.18.0`, or an explanation when the version couldn't be read.
+ */
+export function describeValeVersion(output: string | null): string {
+  if (!output) return "Vale version could not be determined";
+  const version = parseValeVersion(output);
+  return version
+    ? `Vale ${formatValeVersion(version)}`
+    : `Vale version could not be parsed from "${output.trim()}"`;
+}
+
+/**
  * Parses a `vale --version` output line (e.g. `vale version 3.18.0`, or a
  * bare `3.18.0`) into a `[major, minor, patch]` tuple. Returns `null` for
  * anything that doesn't contain a recognizable `X.Y.Z` version.

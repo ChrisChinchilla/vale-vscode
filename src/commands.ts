@@ -4,7 +4,7 @@ import { ExtensionContext } from "vscode";
 
 import { getRelevantWorkspaceFolder } from "./workspaceFolders";
 import { addToVocabulary } from "./vocabulary";
-import { getFileMetrics, runValeCommand } from "./cli";
+import { getFileMetrics, getValeVersionOutput, runValeCommand } from "./cli";
 import {
   clearReadabilityResult,
   getValeOutputChannel,
@@ -15,6 +15,7 @@ import { resolveValeExecutionOptions } from "./config";
 import {
   buildValeConfigArgs,
   computeFleschKincaidGrade,
+  describeValeVersion,
   resolveConfigPath,
   shouldWarnBeforeLinting,
 } from "./utils";
@@ -344,7 +345,32 @@ export function registerCommands(
 
   const showDiagnosticsCommand = vscode.commands.registerCommand(
     "vale.showDiagnostics",
-    () => valeOutputChannel.show(true)
+    async () => {
+      valeOutputChannel.show(true);
+      // The startup log has the version too, but a fresh probe reflects a
+      // Vale upgraded since then. Skipped in an untrusted workspace, since it
+      // runs the (workspace-configurable) Vale executable.
+      if (!vscode.workspace.isTrusted) {
+        valeOutputChannel.appendLine(
+          "[diagnostics] Vale version not checked: workspace is not trusted"
+        );
+        return;
+      }
+      const cmdContext = await resolveCommandContext(
+        context,
+        vscode.window.activeTextEditor
+          ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+          : process.cwd()
+      );
+      if (!cmdContext) return;
+      const output = await getValeVersionOutput(
+        cmdContext.workingDir,
+        cmdContext.execution
+      );
+      valeOutputChannel.appendLine(
+        `[diagnostics] ${describeValeVersion(output)} (${cmdContext.workingDir})`
+      );
+    }
   );
 
   const restartLanguageServerCommand = vscode.commands.registerCommand(

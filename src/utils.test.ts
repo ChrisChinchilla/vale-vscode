@@ -24,7 +24,10 @@ import {
   isUnsupportedLinuxLibc,
   isServerReplaceAction,
   isVersionAtLeast,
+  MIN_VALE_CONFIG_DIR_VERSION,
   MIN_VALE_FILTER_VERSION,
+  describeValeVersion,
+  formatValeVersion,
   VALE_CONFIG_FILE_GLOB,
   DEFAULT_DEBOUNCE_MS,
   resolveEditorBehaviorOptions,
@@ -900,5 +903,34 @@ describe("resolveEditorBehaviorOptions", () => {
         DEFAULT_DEBOUNCE_MS
       );
     }
+  });
+});
+
+describe("describeValeVersion", () => {
+  test("summarises a normal --version line", () => {
+    assert.equal(describeValeVersion("vale version 3.18.0\n"), "Vale 3.18.0");
+  });
+
+  test("reports an undetermined version for a failed probe", () => {
+    assert.equal(describeValeVersion(null), "Vale version could not be determined");
+  });
+
+  test("reports unparseable output and includes it", () => {
+    assert.equal(
+      describeValeVersion("nonsense\n"),
+      'Vale version could not be parsed from "nonsense"'
+    );
+  });
+});
+
+describe("Vale version thresholds", () => {
+  test("formatValeVersion joins the tuple", () => {
+    assert.equal(formatValeVersion([3, 25, 1]), "3.25.1");
+  });
+
+  test(".config/vale.ini needs 3.25.1 exactly or later", () => {
+    assert.equal(isVersionAtLeast([3, 25, 0], MIN_VALE_CONFIG_DIR_VERSION), false);
+    assert.equal(isVersionAtLeast([3, 25, 1], MIN_VALE_CONFIG_DIR_VERSION), true);
+    assert.equal(isVersionAtLeast([3, 26, 0], MIN_VALE_CONFIG_DIR_VERSION), true);
   });
 });

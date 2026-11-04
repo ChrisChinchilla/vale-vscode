@@ -9,7 +9,10 @@ import * as path from "path";
 
 import {
   LSP_TAG,
+  MIN_VALE_CONFIG_DIR_VERSION,
   MIN_VALE_FILTER_VERSION,
+  describeValeVersion,
+  formatValeVersion,
   VALE_CONFIG_FILE_GLOB,
   buildDownloadAssetName,
   detectArch,
@@ -122,47 +125,67 @@ function logDiagnostic(message: string): void {
 }
 
 /**
- * Warns when the Vale CLI vale-ls will invoke predates the version whose
- * `--filter` flag accepts a raw expression (rather than only a file path or
- * named asset) - older versions fail every lint with a cryptic
- * `filter '<expr>' not found` as soon as any filter is sent, which happens
- * with default settings (`vale.enableSpellcheck` defaults to `false`, and
- * `buildValeConfig` always sends `.Extends != "spelling"` in that case, and
- * the same applies once a `vale.valeCLI.filter` expression is set). See
- * https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
- * `.claude/notes/vale-filter-version-check.md`.
+ * Probes the Vale CLI once at client start, logs its version to the Vale
+ * output channel (so **Vale: Show Diagnostics** always has it), and warns
+ * about the known features an old Vale can't support:
  *
- * Only called when `filterExpression` is non-empty, since that's exactly
- * the condition that triggers the bug - a user with no filter configured
- * (or an old-but-unfiltered setup) isn't affected and shouldn't be warned.
+ * - `--filter` with a raw expression (Vale < 3.10.0): every lint fails with a
+ *   cryptic `filter '<expr>' not found`. This happens on default settings
+ *   (`vale.enableSpellcheck` defaults to `false`, and `buildValeConfig`
+ *   always sends `.Extends != "spelling"` in that case), and again once a
+ *   `vale.valeCLI.filter` expression is set. Only checked when
+ *   `filterExpression` is non-empty. See
+ *   https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
+ *   `.claude/notes/vale-filter-version-check.md`.
+ * - `.config/vale.ini` (Vale < 3.25.1): silently ignored. Only checked when
+ *   the folder has such a file and no explicit `vale.valeCLI.config`.
+ *
  * Failure to determine the version (missing binary, Docker unavailable,
- * unparseable output) is treated as "can't check" and silently skipped
- * rather than surfaced as its own error - `client.start()` will still
- * report the real problem if one exists.
+ * unparseable output) is logged and otherwise skipped rather than surfaced
+ * as its own error - `client.start()` will still report the real problem.
+ * With no `vale.valeCLI.path` or Docker, this probes `vale` on PATH, which
+ * may not be the managed install vale-ls uses.
  */
-async function warnIfValeTooOldForFilters(
+async function checkValeVersion(
   workingDir: string,
   execution: ValeExecutionOptions,
-  filterExpression: string
+  filterExpression: string,
+  usesDefaultConfigDirectory: boolean
 ): Promise<void> {
-  if (!filterExpression) return;
-
   const output = await getValeVersionOutput(workingDir, execution);
+  logDiagnostic(describeValeVersion(output));
   if (!output) return;
 
   const version = parseValeVersion(output);
-  if (!version || isVersionAtLeast(version, MIN_VALE_FILTER_VERSION)) return;
+  if (!version) return;
+  const current = formatValeVersion(version);
 
-  const [major, minor, patch] = version;
-  const [minMajor, minMinor, minPatch] = MIN_VALE_FILTER_VERSION;
-  const message =
-    `Vale ${major}.${minor}.${patch} is too old to apply Vale VSCode's filter ` +
-    `settings (minAlertLevel/enableSpellcheck/filter) - Vale ${minMajor}.${minMinor}.${minPatch}+ ` +
-    `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
-    `set vale.valeCLI.minAlertLevel to "inherited", vale.enableSpellcheck to true, and clear ` +
-    `vale.valeCLI.filter to avoid sending a filter at all.`;
-  logDiagnostic(message);
-  vscode.window.showWarningMessage(`Vale: ${message}`);
+  if (
+    filterExpression &&
+    !isVersionAtLeast(version, MIN_VALE_FILTER_VERSION)
+  ) {
+    const min = formatValeVersion(MIN_VALE_FILTER_VERSION);
+    const message =
+      `Vale ${current} is too old to apply Vale VSCode's filter ` +
+      `settings (minAlertLevel/enableSpellcheck/filter) - Vale ${min}+ ` +
+      `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
+      `set vale.valeCLI.minAlertLevel to "inherited", vale.enableSpellcheck to true, and clear ` +
+      `vale.valeCLI.filter to avoid sending a filter at all.`;
+    logDiagnostic(message);
+    vscode.window.showWarningMessage(`Vale: ${message}`);
+  }
+
+  if (
+    usesDefaultConfigDirectory &&
+    !isVersionAtLeast(version, MIN_VALE_CONFIG_DIR_VERSION)
+  ) {
+    const message =
+      `Vale ${current} does not read .config/vale.ini - Vale ` +
+      `${formatValeVersion(MIN_VALE_CONFIG_DIR_VERSION)}+ is required. Upgrade Vale, ` +
+      `or move the file to .vale.ini, or point vale.valeCLI.config at it.`;
+    logDiagnostic(message);
+    vscode.window.showWarningMessage(`Vale: ${message}`);
+  }
 }
 
 let languageServerChannel: vscode.LogOutputChannel | undefined;
@@ -485,10 +508,19 @@ async function startClient(
       valeConfig.noGlobal
     );
   }
-  await warnIfValeTooOldForFilters(
+  // Only `.config/vale.ini` is at stake: an older Vale still finds a root
+  // `.vale.ini`/`_vale.ini`, so a project that has one isn't affected.
+  const usesDefaultConfigDirectory =
+    Boolean(workspaceRoot) &&
+    !valeConfig.configPath &&
+    fs.existsSync(path.join(workspaceRoot!, ".config", "vale.ini")) &&
+    !fs.existsSync(path.join(workspaceRoot!, ".vale.ini")) &&
+    !fs.existsSync(path.join(workspaceRoot!, "_vale.ini"));
+  await checkValeVersion(
     workspaceRoot ?? process.cwd(),
     execution,
-    valeConfig.filter
+    valeConfig.filter,
+    usesDefaultConfigDirectory
   );
 
   const tempArgs: never[] = [];

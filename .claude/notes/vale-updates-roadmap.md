@@ -18,15 +18,16 @@ vale-ls defaults: lint-on-change on, debounce 300ms, metrics code lens on.
       honour the documented defaults (both booleans `false`, debounce 300),
       which is a behaviour change for existing users (see
       `editor-behaviour-settings.md`). Needs manual check in a real host.
-- [ ] `Vale: Open Rule in Regex101` via server command `cli.compile` (YAML rule
-      files only; editor title/context menu).
+- [ ] Moved to `rule-authoring-plan.md` (considered optional): `Vale: Open
+      Rule in Regex101`. It wraps an existing vale-ls command (`cli.compile`),
+      not a new Vale feature.
 
 ### Tier 2 (scope not confirmed)
-- [ ] `Vale: Run Rule Tests` (`vale test`, needs Vale >= 3.24; `--coverage`
-      variant). Undecided whether it belongs in the extension.
-- [ ] Contextual menu visibility for rule-file commands.
-- [ ] Surface detected Vale version in Show Diagnostics; warn below feature
-      minimums.
+- [ ] `Vale: Run Rule Tests` and rule-file menu visibility: moved to
+      `rule-authoring-plan.md`.
+- [x] Surface detected Vale version in Show Diagnostics; warn below feature
+      minimums (filters 3.10.0, `.config/vale.ini` 3.25.1). See
+      `vale-version-awareness.md`. Needs manual check in a real host.
 - [ ] Open UI audit items: LanguageStatusItem, Select Configuration File,
       Vale editor submenu.
 

@@ -75,7 +75,7 @@ The following commands are available from the **Vale** panel in the Explorer sid
 - The extension watches `.vale.ini`, `_vale.ini` and `.config/vale.ini` (the last supported from Vale 3.25.1) in your workspace. When one is created, changed, or deleted, the Vale language server restarts for that folder so diagnostics in open files refresh without a window reload.
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
 - **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
-- **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures.
+- **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures, and the detected Vale version. At startup the extension warns if your Vale is too old for a feature you're using: Vale 3.10.0 or later for the alert-level, spellcheck and filter settings, and Vale 3.25.1 or later to read a `.config/vale.ini`. If you use neither `vale.valeCLI.path` nor Docker, the version shown is for `vale` on your `PATH`, which may differ from the copy the language server installs.
 - **Vale: Add to Accept List** / **Vale: Add to Reject List** add the selected (or right-clicked) word to your vocabulary's `accept.txt` or `reject.txt`. They need `vale.vocabPath` set. Also available as quick fixes on spelling alerts.
 
 ### Multi-root workspaces
