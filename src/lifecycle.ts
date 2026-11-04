@@ -2,7 +2,12 @@ import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
 import { family as detectLibcFamily, version as detectLibcVersion } from "detect-libc";
 
-import { clearReadabilityResult, createReadabilitySurfaces, createValeOutputChannel } from "./ui";
+import {
+  clearReadabilityResult,
+  createLanguageStatus,
+  createReadabilitySurfaces,
+  createValeOutputChannel,
+} from "./ui";
 import {
   ensureLanguageServerBinary,
   hasActiveClients,
@@ -22,6 +27,7 @@ import { registerCodeActions } from "./codeActions";
 export async function activate(context: ExtensionContext): Promise<void> {
   const output = createValeOutputChannel(context);
   createReadabilitySurfaces(context);
+  createLanguageStatus(context);
   // The status bar item reflects a single on-demand Show Metrics run, so
   // switching files makes it stale - hide it until re-run for the new file.
   context.subscriptions.push(

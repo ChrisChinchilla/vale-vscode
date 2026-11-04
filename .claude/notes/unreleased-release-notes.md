@@ -32,6 +32,27 @@ Changing any of these now restarts the language server automatically.
   `.config/vale.ini` location (needs 3.25.1) or for the filter settings
   (needs 3.10.0).
 
+## UI changes
+- **Language status entry** shows Vale as Starting, Ready, Error, or
+  Configuration error; click it for diagnostics.
+- **Removed the Vale panel from the Explorer sidebar.** Every command is
+  still in the command palette (Cmd/Ctrl+Shift+P, type "Vale").
+- New **Vale: Select Configuration File** command.
+- **Vale: Show Configuration** now opens the configuration as JSON in an
+  editor tab instead of the output panel.
+- **Vale: Sync** and the Vale language server download show a cancellable
+  progress notification. Success confirmations for Sync and Restart now
+  appear briefly in the status bar instead of as pop-ups.
+- Add to Accept List / Reject List moved into a **Vale** submenu in the editor
+  context menu.
+- Settings are grouped into Setup, Linting, Vocabulary and Advanced pages,
+  with fuller descriptions. Setting names are unchanged, so nothing needs
+  migrating. Empty text settings now default to `""` instead of `null`.
+
+## Fixes
+- **Vale: Install or Update Vale** now works. It was listed in the command
+  palette but had no handler, so running it did nothing useful.
+
 ## Internal
 - Removed an unused `.clientrc` file watcher left over from the language
   client template.

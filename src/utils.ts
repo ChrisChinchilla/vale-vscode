@@ -726,3 +726,127 @@ export class SharedRegistry<T> {
     return this.entries.has(name);
   }
 }
+
+/** Lifecycle state of one vale-ls client (one per workspace folder). */
+export type ClientState = "starting" | "ready" | "error";
+
+export interface ClientStatus {
+  name: string;
+  state: ClientState;
+  detail?: string;
+}
+
+export interface LanguageStatusSummary {
+  text: string;
+  detail: string;
+  severity: "information" | "warning" | "error";
+  busy: boolean;
+}
+
+/**
+ * Collapses every client's state (plus the count of open configuration
+ * errors reported by vale-ls) into the single Language Status entry shown
+ * for Vale. Failures outrank configuration errors, which outrank "starting".
+ */
+export function summarizeLanguageStatus(
+  clients: readonly ClientStatus[],
+  configErrorCount: number
+): LanguageStatusSummary {
+  const failed = clients.filter((c) => c.state === "error");
+  if (failed.length > 0) {
+    return {
+      text: "Vale: Error",
+      detail: failed
+        .map((c) => (c.detail ? `${c.name}: ${c.detail}` : c.name))
+        .join("; "),
+      severity: "error",
+      busy: false,
+    };
+  }
+  if (configErrorCount > 0) {
+    return {
+      text: "Vale: Configuration error",
+      detail: `${configErrorCount} configuration problem${configErrorCount === 1 ? "" : "s"} - see the Problems view`,
+      severity: "error",
+      busy: false,
+    };
+  }
+  if (clients.some((c) => c.state === "starting")) {
+    return {
+      text: "Vale: Starting",
+      detail: "The Vale language server is starting",
+      severity: "information",
+      busy: true,
+    };
+  }
+  if (clients.length === 0) {
+    return {
+      text: "Vale: Not running",
+      detail: "No Vale language server is running",
+      severity: "warning",
+      busy: false,
+    };
+  }
+  return {
+    text: "Vale: Ready",
+    detail: "The Vale language server is running",
+    severity: "information",
+    busy: false,
+  };
+}
+
+/**
+ * True for the diagnostic codes vale-ls uses when Vale itself fails to load
+ * a configuration or rule (`E100`, `E201`, ...), as opposed to the rule
+ * names (`Vale.Spelling`, `Microsoft.Contractions`) of ordinary prose alerts.
+ */
+export function isValeConfigErrorCode(
+  code: string | number | { value: string | number } | undefined
+): boolean {
+  const value = typeof code === "object" && code !== null ? code.value : code;
+  return typeof value === "string" && /^E\d+$/.test(value);
+}
+
+/**
+ * Value to store in `vale.valeCLI.config` for a file the user picked:
+ * relative (forward-slash) when it sits inside the workspace folder, so the
+ * setting stays portable across machines, absolute otherwise.
+ */
+export function toConfigSettingValue(
+  selectedPath: string,
+  workspaceRoot: string | undefined
+): string {
+  if (workspaceRoot) {
+    const relative = path.relative(workspaceRoot, selectedPath);
+    if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+      return relative.split(path.sep).join("/");
+    }
+  }
+  return selectedPath;
+}
+
+/**
+ * Prepares `vale ls-config` output for display in an editor tab: pretty
+ * JSON when it parses (tolerating any warning text printed before the
+ * object), plain text otherwise.
+ */
+export function formatConfigOutput(raw: string): {
+  content: string;
+  language: "json" | "plaintext";
+} {
+  const trimmed = raw.trim();
+  const candidates = [trimmed];
+  const brace = trimmed.indexOf("{");
+  if (brace > 0) candidates.push(trimmed.slice(brace));
+  for (const candidate of candidates) {
+    try {
+      return {
+        content: JSON.stringify(JSON.parse(candidate), null, 2) + "\n",
+        language: "json",
+      };
+    } catch {
+      // try the next candidate
+    }
+  }
+  return { content: trimmed + "\n", language: "plaintext" };
+}

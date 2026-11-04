@@ -74,6 +74,11 @@
         "title": "Vale: Add to Accept List"
       },
       {
+        "command": "vale.selectConfigFile",
+        "title": "Vale: Select Configuration File",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "vale.addToRejectList",
         "title": "Vale: Add to Reject List"
       },
@@ -88,166 +93,223 @@
         "icon": "$(graph)"
       }
     ],
-    "views": {
-      "explorer": [
-        {
-          "id": "valeCommands",
-          "name": "Vale"
-        }
-      ]
-    },
-    "configuration": {
-      "type": "object",
-      "title": "Vale",
-      "properties": {
-        "vale.maxNumberOfProblems": {
-          "scope": "resource",
-          "type": "number",
-          "default": 100,
-          "description": "Controls the maximum number of problems produced by the server."
-        },
-        "vale.trace.server": {
-          "scope": "window",
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
-        },
-        "vale.valeCLI.config": {
-          "scope": "resource",
-          "type": "string",
-          "default": null,
-          "description": "Absolute or relative path to a Vale config file. Supports ~, ${workspaceFolder}, ${userHome}, and ${env:VAR}. If not specified, the default search process is used (relative to the current file)."
-        },
-        "vale.valeCLI.noGlobal": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "description": "Pass `--no-global` to every Vale call so that Vale ignores the user-level `.vale.ini` instead of merging it into the project configuration."
-        },
-        "vale.valeCLI.syncOnStartup": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "description": "Runs `vale sync` upon starting the language server"
-        },
-        "vale.valeCLI.filter": {
-          "scope": "resource",
-          "type": "string",
-          "default": null,
-          "description": "A raw Vale filter expression (e.g. `.Line > 10`), combined with the minimum alert level and spell-checking filters using `and`."
-        },
-        "vale.valeCLI.installVale": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically install and update Vale. If false, the vale executable needs to be available on the user's $PATH. And you need an accessible .vale.ini. file."
-        },
-        "vale.valeCLI.path": {
-          "scope": "resource",
-          "type": "string",
-          "default": null,
-          "markdownDescription": "Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names use `PATH`. Workspace-relative executable paths are ignored in Restricted Mode. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
-        },
-        "vale.docker.enabled": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Run Vale inside a Docker container instead of a local install. Overrides `#vale.valeCLI.installVale#` and `#vale.valeCLI.path#`. Requires a workspace folder on the local filesystem and Docker installed."
-        },
-        "vale.docker.image": {
-          "scope": "resource",
-          "type": "string",
-          "default": "jdkato/vale",
-          "markdownDescription": "Docker image to run Vale from. Only used when `#vale.docker.enabled#` is true."
-        },
-        "vale.docker.extraArgs": {
-          "scope": "resource",
-          "type": "array",
-          "items": {
-            "type": "string"
+    "configuration": [
+      {
+        "type": "object",
+        "title": "Setup",
+        "order": 1,
+        "properties": {
+          "vale.valeCLI.path": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "order": 1,
+            "markdownDescription": "Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names use `PATH`. Workspace-relative executable paths are ignored in Restricted Mode. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
           },
-          "default": [],
-          "markdownDescription": "Extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace. Only used when `#vale.docker.enabled#` is true."
-        },
-        "vale.valeCLI.lintOnChange": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Lint as you type, rather than only when a file is saved."
-        },
-        "vale.valeCLI.debounceMs": {
-          "scope": "resource",
-          "type": "number",
-          "default": 300,
-          "minimum": 0,
-          "markdownDescription": "How long typing has to settle before linting, in milliseconds. Only applies when `#vale.valeCLI.lintOnChange#` is enabled."
-        },
-        "vale.valeCLI.showMetrics": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": false,
-          "description": "Show a code lens with the document's metrics (word count, reading time, and so on)."
-        },
-        "vale.valeCLI.minAlertLevel": {
-          "scope": "resource",
-          "type": "string",
-          "default": "inherited",
-          "enum": [
-            "inherited",
-            "suggestion",
-            "warning",
-            "error"
-          ],
-          "markdownEnumDescriptions": [
-            "Inherits the `minAlertLevel` from the active configuration file.",
-            "Sets `minAlertLevel` to `suggestion`, overriding any configuration files.",
-            "Sets `minAlertLevel` to `warning`, overriding any configuration files.",
-            "Sets `minAlertLevel` to `error`, overriding any configuration files."
-          ],
-          "markdownDescription": "Defines from which level of errors and above to display in the problems output."
-        },
-        "vale.doNotShowWarningForFileToBeSavedBeforeLinting": {
-          "type": "boolean",
-          "default": false,
-          "description": "Do not show warning dialog that a file must be saved to be linted."
-        },
-        "vale.readabilityProblemLocation": {
-          "type": "string",
-          "enum": [
-            "status",
-            "inline",
-            "both"
-          ],
-          "default": "status",
-          "markdownEnumDescriptions": [
-            "Displays readability problems in the status bar.",
-            "Displays readability problems inline with other problems.",
-            "Displays readability problems both in the status bar and inline in the file."
-          ],
-          "markdownDescription": "Determines where file-level readability problems are displayed."
-        },
-        "vale.enableSpellcheck": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable spell checking with Vale."
-        },
-        "vale.vocabPath": {
-          "scope": "resource",
-          "type": "string",
-          "default": null,
-          "description": "Path to the Vale vocabulary folder to work with add/remove menus (relative to StylesPath). Example: 'MyVocab' will create vocabularies at <StylesPath>/config/vocabularies/MyVocab/"
+          "vale.valeCLI.installVale": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 2,
+            "markdownDescription": "Let the language server download and update its own copy of Vale. If disabled, a `vale` executable must be on your `$PATH` (or set `#vale.valeCLI.path#`), and Vale needs an accessible `.vale.ini`."
+          },
+          "vale.valeCLI.config": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "order": 3,
+            "markdownDescription": "Absolute or relative path to a Vale config file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. If empty, Vale's default search is used (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`, looking upwards from the file). Use **Vale: Select Configuration File** to pick one."
+          },
+          "vale.valeCLI.noGlobal": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 4,
+            "markdownDescription": "Pass `--no-global` to every Vale call so that Vale ignores the user-level `.vale.ini` instead of merging it into the project configuration."
+          },
+          "vale.valeCLI.syncOnStartup": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 5,
+            "markdownDescription": "Run `vale sync` when the language server starts, to download the packages your configuration lists."
+          },
+          "vale.docker.enabled": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 6,
+            "markdownDescription": "Run Vale inside a Docker container instead of a local install. Overrides `#vale.valeCLI.installVale#` and `#vale.valeCLI.path#`. Requires a workspace folder on the local filesystem and Docker installed."
+          },
+          "vale.docker.image": {
+            "scope": "resource",
+            "type": "string",
+            "default": "jdkato/vale",
+            "order": 7,
+            "markdownDescription": "Docker image to run Vale from. Only used when `#vale.docker.enabled#` is true."
+          },
+          "vale.docker.extraArgs": {
+            "scope": "resource",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "order": 8,
+            "markdownDescription": "Extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace. Only used when `#vale.docker.enabled#` is true."
+          }
+        }
+      },
+      {
+        "type": "object",
+        "title": "Linting",
+        "order": 2,
+        "properties": {
+          "vale.valeCLI.lintOnChange": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 1,
+            "markdownDescription": "Lint as you type, rather than only when a file is saved. Changing this restarts the language server."
+          },
+          "vale.valeCLI.debounceMs": {
+            "scope": "resource",
+            "type": "number",
+            "default": 300,
+            "minimum": 0,
+            "maximum": 10000,
+            "order": 2,
+            "markdownDescription": "How long typing has to settle before linting, in milliseconds. Only applies when `#vale.valeCLI.lintOnChange#` is enabled."
+          },
+          "vale.valeCLI.minAlertLevel": {
+            "scope": "resource",
+            "type": "string",
+            "default": "inherited",
+            "enum": [
+              "inherited",
+              "suggestion",
+              "warning",
+              "error"
+            ],
+            "markdownEnumDescriptions": [
+              "Inherits the `minAlertLevel` from the active configuration file.",
+              "Sets `minAlertLevel` to `suggestion`, overriding any configuration files.",
+              "Sets `minAlertLevel` to `warning`, overriding any configuration files.",
+              "Sets `minAlertLevel` to `error`, overriding any configuration files."
+            ],
+            "enumItemLabels": [
+              "Inherited",
+              "Suggestion",
+              "Warning",
+              "Error"
+            ],
+            "order": 3,
+            "markdownDescription": "Defines from which level of errors and above to display in the problems output."
+          },
+          "vale.enableSpellcheck": {
+            "type": "boolean",
+            "default": true,
+            "order": 4,
+            "markdownDescription": "Enable spell checking with Vale (the built-in `Vale.Spelling` rule)."
+          },
+          "vale.valeCLI.filter": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "order": 5,
+            "markdownDescription": "A raw Vale filter expression (for example `.Line > 10`), combined with the minimum alert level and spell-checking filters using `and`. Requires Vale 3.10.0 or later."
+          },
+          "vale.maxNumberOfProblems": {
+            "scope": "resource",
+            "type": "number",
+            "default": 100,
+            "minimum": 0,
+            "order": 6,
+            "markdownDescription": "The maximum number of problems shown for one file. Set to `0` for no limit."
+          },
+          "vale.doNotShowWarningForFileToBeSavedBeforeLinting": {
+            "type": "boolean",
+            "default": false,
+            "order": 7,
+            "markdownDescription": "Do not show the warning that a file must be saved before **Vale: Show Readability Metrics** can read it."
+          },
+          "vale.readabilityProblemLocation": {
+            "type": "string",
+            "enum": [
+              "status",
+              "inline",
+              "both"
+            ],
+            "default": "status",
+            "markdownEnumDescriptions": [
+              "Displays readability problems in the status bar.",
+              "Displays readability problems inline with other problems.",
+              "Displays readability problems both in the status bar and inline in the file."
+            ],
+            "enumItemLabels": [
+              "Status bar",
+              "Inline",
+              "Both"
+            ],
+            "order": 8,
+            "markdownDescription": "Determines where file-level readability problems are displayed."
+          },
+          "vale.valeCLI.showMetrics": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 9,
+            "markdownDescription": "Show a code lens at the top of each document with its metrics (word count, reading time, and so on). Changing this restarts the language server."
+          }
+        }
+      },
+      {
+        "type": "object",
+        "title": "Vocabulary",
+        "order": 3,
+        "properties": {
+          "vale.vocabPath": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "order": 1,
+            "markdownDescription": "Name of the vocabulary folder used by **Vale: Add to Accept List** and **Vale: Add to Reject List**, relative to the `StylesPath`. For example, `MyVocab` uses `<StylesPath>/config/vocabularies/MyVocab/`."
+          }
+        }
+      },
+      {
+        "type": "object",
+        "title": "Advanced",
+        "order": 4,
+        "properties": {
+          "vale.trace.server": {
+            "scope": "window",
+            "type": "string",
+            "enum": [
+              "off",
+              "messages",
+              "verbose"
+            ],
+            "default": "off",
+            "enumDescriptions": [
+              "No tracing.",
+              "Trace requests and responses, without their content.",
+              "Trace requests and responses including their content."
+            ],
+            "order": 1,
+            "markdownDescription": "Traces the communication between VS Code and the language server. Output appears in the **Vale Language Server** output channel."
+          }
         }
       }
-    },
+    ],
     "menus": {
       "commandPalette": [
         {
           "command": "vale.sync",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "vale.selectConfigFile",
           "when": "isWorkspaceTrusted"
         },
         {
@@ -267,26 +329,30 @@
           "when": "isWorkspaceTrusted"
         }
       ],
-      "view/title": [
-        {
-          "command": "vale.sync",
-          "when": "view == valeCommands && isWorkspaceTrusted",
-          "group": "navigation"
-        }
-      ],
       "editor/context": [
         {
-          "command": "vale.addToAcceptList",
+          "submenu": "vale.editorContext",
           "group": "vale@1",
           "when": "editorHasSelection && isWorkspaceTrusted"
+        }
+      ],
+      "vale.editorContext": [
+        {
+          "command": "vale.addToAcceptList",
+          "group": "vale@1"
         },
         {
           "command": "vale.addToRejectList",
-          "group": "vale@2",
-          "when": "editorHasSelection && isWorkspaceTrusted"
+          "group": "vale@2"
         }
       ]
-    }
+    },
+    "submenus": [
+      {
+        "id": "vale.editorContext",
+        "label": "Vale"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "webpack --mode production",

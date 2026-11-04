@@ -40,7 +40,7 @@ import {
   ensureDockerWrapperScript,
   getWindowsDockerProxy,
 } from "./docker";
-import { getValeOutputChannel } from "./ui";
+import { clearClientStatus, getValeOutputChannel, setClientStatus } from "./ui";
 import { getValeVersionOutput, probeExecutable } from "./cli";
 
 import {
@@ -48,6 +48,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
+  State,
 } from "vscode-languageclient/node";
 
 /**
@@ -291,23 +292,38 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
   );
 
   try {
-    vscode.window.showInformationMessage(
-      "First launch: Downloading Vale Language Server"
+    const { buffer, expectedLength } = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Vale: Downloading Vale Language Server ${LSP_TAG}`,
+        cancellable: true,
+      },
+      async (_progress, token) => {
+        const abort = new AbortController();
+        token.onCancellationRequested(() => abort.abort());
+        try {
+          const response = await fetch(URL, { signal: abort.signal });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to download ${assetName}: HTTP ${response.status} ${response.statusText}`
+            );
+          }
+          if (!response.body) {
+            throw new Error("Failed to fetch the response body.");
+          }
+          return {
+            buffer: Buffer.from(await response.arrayBuffer()),
+            expectedLength: response.headers.get("content-length"),
+          };
+        } catch (error) {
+          if (token.isCancellationRequested) {
+            throw new Error("Download of the Vale Language Server was cancelled.");
+          }
+          throw error;
+        }
+      }
     );
 
-    const response = await fetch(URL);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to download ${assetName}: HTTP ${response.status} ${response.statusText}`
-      );
-    }
-    if (!response.body) {
-      throw new Error("Failed to fetch the response body.");
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    const expectedLength = response.headers.get("content-length");
     if (expectedLength && buffer.length !== Number(expectedLength)) {
       throw new Error(
         `Download size mismatch for ${assetName}: expected ${expectedLength} bytes, got ${buffer.length}.`
@@ -418,6 +434,8 @@ export async function stopAndRemoveClient(key: string): Promise<void> {
 
 async function stopClient(key: string): Promise<void> {
   const existing = clients.get(key);
+  // A failed start leaves an error status but no client; drop it either way.
+  clearClientStatus(key);
   if (!existing) {
     return;
   }
@@ -583,12 +601,29 @@ async function startClient(
   const client = new LanguageClient(clientId, clientName, serverOptions, clientOptions);
   suppressCommandRegistration(client);
   clients.set(key, client);
+  const statusName = folder?.name ?? "Vale";
+  setClientStatus(key, statusName, "starting");
+  // A server that dies after a successful start (crash, killed binary) never
+  // reaches the catch below; surface it too. `clients.get(key) === client`
+  // keeps an intentional stop/restart from reading as a failure.
+  client.onDidChangeState((event) => {
+    if (event.newState === State.Stopped && clients.get(key) === client) {
+      setClientStatus(key, statusName, "error", "The server stopped unexpectedly");
+    }
+  });
 
   try {
     await client.start();
     shareServerCommands(client);
+    setClientStatus(key, statusName, "ready");
   } catch (err) {
     console.error(err);
+    setClientStatus(
+      key,
+      statusName,
+      "error",
+      err instanceof Error ? err.message : String(err)
+    );
     logDiagnostic(
       `Failed to start Vale Language Server${folder ? ` for ${folder.uri.toString()}` : ""}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`
     );

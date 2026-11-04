@@ -1,5 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 
+import * as vscode from "vscode";
+
 import {
   buildDockerProxyEnvironment,
   buildDockerRunArgs,
@@ -40,36 +42,91 @@ function spawnVale(
   return spawn(execution.binaryPath, args, options);
 }
 
-/**
- * Runs a Vale CLI command and streams the output to the Vale output channel.
- */
-export async function runValeCommand(
+/** Thrown when a command is stopped through its cancellation token. */
+export class ValeCommandCancelledError extends Error {
+  constructor(command: string) {
+    super(`vale ${command} was cancelled`);
+    this.name = "ValeCommandCancelledError";
+  }
+}
+
+function runValeProcess(
   args: string[],
   workingDir: string,
-  execution: ValeExecutionOptions
+  execution: ValeExecutionOptions,
+  onStdout: (text: string) => void,
+  token?: vscode.CancellationToken
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const valeOutputChannel = getValeOutputChannel();
     const valeProcess = spawnVale(args, workingDir, execution);
+    let cancelled = false;
 
-    valeProcess.stdout.on("data", (data) => {
-      valeOutputChannel.append(data.toString());
+    const cancellation = token?.onCancellationRequested(() => {
+      cancelled = true;
+      valeProcess.kill();
     });
+    const finish = () => cancellation?.dispose();
+
+    valeProcess.stdout.on("data", (data) => onStdout(data.toString()));
 
     valeProcess.stderr.on("data", (data) => {
       valeOutputChannel.append(data.toString());
     });
 
-    valeProcess.on("error", reject);
+    valeProcess.on("error", (error) => {
+      finish();
+      reject(error);
+    });
 
     valeProcess.on("close", (code) => {
-      if (code === 0) {
+      finish();
+      if (cancelled) {
+        reject(new ValeCommandCancelledError(args[args.length - 1] ?? args[0]));
+      } else if (code === 0) {
         resolve();
       } else {
         reject(new Error(`vale ${args[0]} exited with code ${code}`));
       }
     });
   });
+}
+
+/**
+ * Runs a Vale CLI command and streams the output to the Vale output channel.
+ * Rejects with `ValeCommandCancelledError` if `token` is cancelled (the
+ * process is killed).
+ */
+export async function runValeCommand(
+  args: string[],
+  workingDir: string,
+  execution: ValeExecutionOptions,
+  token?: vscode.CancellationToken
+): Promise<void> {
+  const valeOutputChannel = getValeOutputChannel();
+  return runValeProcess(
+    args,
+    workingDir,
+    execution,
+    (text) => valeOutputChannel.append(text),
+    token
+  );
+}
+
+/**
+ * Runs a Vale CLI command and returns its stdout instead of streaming it
+ * (stderr still goes to the Vale output channel).
+ */
+export async function runValeCommandCapture(
+  args: string[],
+  workingDir: string,
+  execution: ValeExecutionOptions
+): Promise<string> {
+  let stdout = "";
+  await runValeProcess(args, workingDir, execution, (text) => {
+    stdout += text;
+  });
+  return stdout;
 }
 
 /**

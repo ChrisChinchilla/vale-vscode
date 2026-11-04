@@ -1,112 +1,95 @@
 import * as vscode from "vscode";
 
+import { isValeConfigErrorCode, summarizeLanguageStatus } from "./utils";
+import type { ClientState, ClientStatus } from "./utils";
+
 /**
- * UI surfaces: the Vale output channel and the "Vale" Explorer sidebar
- * tree view of commands.
+ * UI surfaces: the Vale output channel, the readability status bar item and
+ * diagnostics, and the Vale Language Status entry.
  */
 
-export class ValeCommandItem extends vscode.TreeItem {
-  constructor(
-    label: string,
-    commandId: string,
-    commandTitle: string,
-    iconName: string,
-    tooltip?: string
-  ) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.command = { command: commandId, title: commandTitle };
-    this.iconPath = new vscode.ThemeIcon(iconName);
-    if (tooltip) {
-      this.tooltip = tooltip;
-    }
-  }
+const clientStatuses = new Map<string, ClientStatus>();
+const configErrorUris = new Set<string>();
+let languageStatusItem: vscode.LanguageStatusItem | undefined;
+
+function renderLanguageStatus(): void {
+  if (!languageStatusItem) return;
+  const summary = summarizeLanguageStatus(
+    [...clientStatuses.values()],
+    configErrorUris.size
+  );
+  languageStatusItem.text = summary.text;
+  languageStatusItem.detail = summary.detail;
+  languageStatusItem.busy = summary.busy;
+  languageStatusItem.severity =
+    summary.severity === "error"
+      ? vscode.LanguageStatusSeverity.Error
+      : summary.severity === "warning"
+        ? vscode.LanguageStatusSeverity.Warning
+        : vscode.LanguageStatusSeverity.Information;
 }
 
-export class ValeCommandsProvider
-  implements vscode.TreeDataProvider<ValeCommandItem>, vscode.Disposable
-{
-  private readonly _onDidChangeTreeData =
-    new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+/**
+ * Creates the single Language Status entry for Vale. It appears for every
+ * file document, opens **Vale: Show Diagnostics** when clicked, and counts
+ * vale-ls's configuration-error diagnostics (`E###` codes) alongside each
+ * client's start/stop state.
+ */
+export function createLanguageStatus(context: vscode.ExtensionContext): void {
+  languageStatusItem = vscode.languages.createLanguageStatusItem("vale.status", {
+    scheme: "file",
+  });
+  languageStatusItem.name = "Vale";
+  languageStatusItem.command = {
+    command: "vale.showDiagnostics",
+    title: "Show Diagnostics",
+  };
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
-  }
-
-  dispose(): void {
-    this._onDidChangeTreeData.dispose();
-  }
-
-  getTreeItem(element: ValeCommandItem): vscode.TreeItem {
-    return element;
-  }
-
-  getChildren(): ValeCommandItem[] {
-    // Commands with workspace-linked side effects are gated on Workspace
-    // Trust the same way as their handlers; diagnostics and an explicit
-    // server restart remain available for troubleshooting Restricted Mode.
-    if (!vscode.workspace.isTrusted) {
-      return [
-        new ValeCommandItem(
-          "Trust this workspace to use these commands",
-          "workbench.action.manageTrust",
-          "Manage Workspace Trust",
-          "shield",
-          "Sync, Show Configuration, and Show Metrics all run the Vale executable, which requires a trusted workspace"
-        ),
-        new ValeCommandItem(
-          "Restart Language Server",
-          "vale.restartLanguageServer",
-          "Restart Language Server",
-          "debug-restart"
-        ),
-        new ValeCommandItem(
-          "Show Diagnostics",
-          "vale.showDiagnostics",
-          "Show Diagnostics",
-          "output"
-        ),
-      ];
+  const refreshConfigErrors = (uris: readonly vscode.Uri[]) => {
+    for (const uri of uris) {
+      const hasConfigError = vscode.languages
+        .getDiagnostics(uri)
+        .some(
+          (d) =>
+            d.source === "vale-ls" &&
+            d.severity === vscode.DiagnosticSeverity.Error &&
+            isValeConfigErrorCode(d.code)
+        );
+      if (hasConfigError) configErrorUris.add(uri.toString());
+      else configErrorUris.delete(uri.toString());
     }
+    renderLanguageStatus();
+  };
 
-    return [
-      new ValeCommandItem(
-        "Sync Packages",
-        "vale.sync",
-        "Sync",
-        "sync",
-        "Download and install Vale packages defined in your config"
-      ),
-      new ValeCommandItem(
-        "Show Configuration",
-        "vale.showConfig",
-        "Show Configuration",
-        "gear",
-        "Display the active Vale configuration (vale ls-config)"
-      ),
-      new ValeCommandItem(
-        "Show File Metrics",
-        "vale.showMetrics",
-        "Show Metrics",
-        "graph",
-        "Display readability metrics for the active file (vale ls-metrics)"
-      ),
-      new ValeCommandItem(
-        "Restart Language Server",
-        "vale.restartLanguageServer",
-        "Restart Language Server",
-        "debug-restart",
-        "Reinstall if needed and restart every Vale language-server instance"
-      ),
-      new ValeCommandItem(
-        "Show Diagnostics",
-        "vale.showDiagnostics",
-        "Show Diagnostics",
-        "output",
-        "Show Vale startup and execution diagnostics"
-      ),
-    ];
-  }
+  context.subscriptions.push(
+    languageStatusItem,
+    vscode.languages.onDidChangeDiagnostics((e) => refreshConfigErrors(e.uris)),
+    {
+      dispose: () => {
+        clientStatuses.clear();
+        configErrorUris.clear();
+        languageStatusItem = undefined;
+      },
+    }
+  );
+  renderLanguageStatus();
+}
+
+/** Records one client's state (keyed like `clients` in `languageServer.ts`). */
+export function setClientStatus(
+  key: string,
+  name: string,
+  state: ClientState,
+  detail?: string
+): void {
+  clientStatuses.set(key, { name, state, detail });
+  renderLanguageStatus();
+}
+
+/** Forgets a client that was stopped on purpose. */
+export function clearClientStatus(key: string): void {
+  clientStatuses.delete(key);
+  renderLanguageStatus();
 }
 
 let readabilityStatusBarItem: vscode.StatusBarItem;
@@ -179,22 +162,4 @@ export function createValeOutputChannel(
 
 export function getValeOutputChannel(): vscode.OutputChannel {
   return valeOutputChannel;
-}
-
-export function registerValeCommandsTreeView(
-  context: vscode.ExtensionContext
-): vscode.TreeView<ValeCommandItem> {
-  const valeCommandsProvider = new ValeCommandsProvider();
-  const valeTreeView = vscode.window.createTreeView("valeCommands", {
-    treeDataProvider: valeCommandsProvider,
-    showCollapseAll: false,
-  });
-  context.subscriptions.push(
-    valeTreeView,
-    valeCommandsProvider,
-    vscode.workspace.onDidGrantWorkspaceTrust(() =>
-      valeCommandsProvider.refresh()
-    )
-  );
-  return valeTreeView;
 }

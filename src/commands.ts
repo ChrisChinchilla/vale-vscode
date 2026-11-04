@@ -2,13 +2,19 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { ExtensionContext } from "vscode";
 
+import { hasActiveClients } from "./languageServer";
 import { getRelevantWorkspaceFolder } from "./workspaceFolders";
 import { addToVocabulary } from "./vocabulary";
-import { getFileMetrics, getValeVersionOutput, runValeCommand } from "./cli";
+import {
+  ValeCommandCancelledError,
+  getFileMetrics,
+  getValeVersionOutput,
+  runValeCommand,
+  runValeCommandCapture,
+} from "./cli";
 import {
   clearReadabilityResult,
   getValeOutputChannel,
-  registerValeCommandsTreeView,
   showReadabilityResult,
 } from "./ui";
 import { resolveValeExecutionOptions } from "./config";
@@ -16,8 +22,10 @@ import {
   buildValeConfigArgs,
   computeFleschKincaidGrade,
   describeValeVersion,
+  formatConfigOutput,
   resolveConfigPath,
   shouldWarnBeforeLinting,
+  toConfigSettingValue,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { getWindowsDockerProxy } from "./docker";
@@ -158,8 +166,8 @@ async function resolveCommandContext(
 }
 
 /**
- * Registers all user-facing Vale commands (command palette, editor context
- * menu, and the "Vale" Explorer sidebar tree view).
+ * Registers all user-facing Vale commands (command palette and the editor
+ * context menu).
  */
 export function registerCommands(
   context: ExtensionContext,
@@ -235,18 +243,32 @@ export function registerCommands(
     if (!cmdContext) return;
 
     try {
-      valeOutputChannel.show(true);
       valeOutputChannel.appendLine("\nRunning vale sync...\n");
 
-      await runValeCommand(
-        [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "sync"],
-        cmdContext.workingDir,
-        cmdContext.execution
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "Vale: Syncing packages",
+          cancellable: true,
+        },
+        (_progress, token) =>
+          runValeCommand(
+            [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "sync"],
+            cmdContext.workingDir,
+            cmdContext.execution,
+            token
+          )
       );
 
       valeOutputChannel.appendLine("\nSync completed successfully.");
-      vscode.window.showInformationMessage("Vale: Sync completed successfully");
+      vscode.window.setStatusBarMessage("Vale: Sync completed", 4000);
     } catch (error) {
+      if (error instanceof ValeCommandCancelledError) {
+        valeOutputChannel.appendLine("\nSync cancelled.");
+        vscode.window.setStatusBarMessage("Vale: Sync cancelled", 4000);
+        return;
+      }
+      valeOutputChannel.show(true);
       console.error("Vale sync failed:", error);
       showCommandError("Sync failed", error);
     }
@@ -255,7 +277,8 @@ export function registerCommands(
   // Register vale.sync command
   const syncCommand = vscode.commands.registerCommand("vale.sync", runValeSync);
 
-  // Register vale.showConfig command - runs `vale ls-config` and shows output
+  // Register vale.showConfig command - runs `vale ls-config` and opens the
+  // result as JSON in an editor tab
   const showConfigCommand = vscode.commands.registerCommand(
     "vale.showConfig",
     async () => {
@@ -265,16 +288,88 @@ export function registerCommands(
       if (!cmdContext) return;
 
       try {
-        valeOutputChannel.show(true);
         valeOutputChannel.appendLine("\nRunning vale ls-config...\n");
 
-        await runValeCommand(
-          [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "ls-config"],
-          cmdContext.workingDir,
-          cmdContext.execution
+        const output = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Window,
+            title: "Vale: Reading configuration",
+          },
+          () =>
+            runValeCommandCapture(
+              [...buildValeConfigArgs(cmdContext.configPath, cmdContext.noGlobal), "ls-config"],
+              cmdContext.workingDir,
+              cmdContext.execution
+            )
+        );
+
+        const { content, language } = formatConfigOutput(output);
+        const document = await vscode.workspace.openTextDocument({ content, language });
+        await vscode.window.showTextDocument(document, { preview: true });
+      } catch (error) {
+        valeOutputChannel.show(true);
+        showCommandError("Failed to show configuration", error);
+      }
+    }
+  );
+
+  // Register vale.selectConfigFile - picks the file stored in vale.valeCLI.config
+  const selectConfigFileCommand = vscode.commands.registerCommand(
+    "vale.selectConfigFile",
+    async () => {
+      if (!requireTrustedWorkspace()) return;
+
+      const folder = await getRelevantWorkspaceFolder();
+      const folders = vscode.workspace.workspaceFolders;
+      // A cancelled folder prompt in a multi-root window means "abort".
+      if (!folder && folders && folders.length > 1) return;
+
+      const choice = await vscode.window.showQuickPick(
+        [
+          { label: "$(file) Choose a Vale configuration file...", action: "choose" },
+          {
+            label: "$(discard) Use Vale's automatic discovery",
+            description: "Clears vale.valeCLI.config",
+            action: "clear",
+          },
+        ],
+        { placeHolder: "Select the Vale configuration file to use" }
+      );
+      if (!choice) return;
+
+      let value: string | undefined;
+      if (choice.action === "choose") {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          defaultUri: folder?.uri,
+          openLabel: "Use as Vale configuration",
+          filters: { "Vale configuration": ["ini"], "All files": ["*"] },
+        });
+        if (!picked || picked.length === 0) return;
+        value = toConfigSettingValue(picked[0].fsPath, folder?.uri.fsPath);
+      }
+
+      // Folder-level settings only exist in multi-root windows; a
+      // single-folder window stores them with the workspace.
+      const target =
+        folder && folders && folders.length > 1
+          ? vscode.ConfigurationTarget.WorkspaceFolder
+          : folder
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+      try {
+        await vscode.workspace
+          .getConfiguration(undefined, folder?.uri)
+          .update("vale.valeCLI.config", value, target);
+        // The language server restarts itself when this setting changes.
+        vscode.window.setStatusBarMessage(
+          value
+            ? `Vale: Using configuration ${value}`
+            : "Vale: Using automatic configuration discovery",
+          4000
         );
       } catch (error) {
-        showCommandError("Failed to show configuration", error);
+        showCommandError("Failed to update the configuration setting", error);
       }
     }
   );
@@ -343,6 +438,36 @@ export function registerCommands(
     }
   );
 
+  // Register vale.install - runs vale-ls's own `cli.install`, which the
+  // language-server module re-registers as a VS Code command routed to the
+  // active editor's folder. The server installs or updates the Vale it
+  // manages and reports the outcome itself ("Vale is up to date.", "Vale vX
+  // installed."); with `vale.valeCLI.path` or Docker it reports that it is
+  // skipping the install instead, since it isn't the one running that Vale.
+  const installValeCommand = vscode.commands.registerCommand(
+    "vale.install",
+    async () => {
+      if (!hasActiveClients()) {
+        vscode.window.showWarningMessage(
+          "Vale: the language server is not running. Run Vale: Restart Language Server first."
+        );
+        return;
+      }
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Window,
+            title: "Vale: Installing or updating Vale",
+          },
+          () => Promise.resolve(vscode.commands.executeCommand("cli.install"))
+        );
+      } catch (error) {
+        valeOutputChannel.show(true);
+        showCommandError("Failed to install Vale", error);
+      }
+    }
+  );
+
   const showDiagnosticsCommand = vscode.commands.registerCommand(
     "vale.showDiagnostics",
     async () => {
@@ -380,9 +505,7 @@ export function registerCommands(
       valeOutputChannel.appendLine("[diagnostics] Restart requested by user");
       try {
         await restartLanguageServer();
-        vscode.window.showInformationMessage(
-          "Vale: Language Server restarted successfully"
-        );
+        vscode.window.setStatusBarMessage("Vale: Language Server restarted", 4000);
       } catch (error) {
         valeOutputChannel.appendLine(
           `[diagnostics] Restart failed: ${formatError(error)}`
@@ -392,15 +515,14 @@ export function registerCommands(
     }
   );
 
-  // Register the Vale commands TreeView in the Explorer sidebar
-  registerValeCommandsTreeView(context);
-
   context.subscriptions.push(
     addToAcceptCommand,
     addToRejectCommand,
     syncCommand,
     showConfigCommand,
+    selectConfigFileCommand,
     showMetricsCommand,
+    installValeCommand,
     showDiagnosticsCommand,
     restartLanguageServerCommand
   );

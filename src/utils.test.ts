@@ -30,6 +30,10 @@ import {
   formatValeVersion,
   VALE_CONFIG_FILE_GLOB,
   DEFAULT_DEBOUNCE_MS,
+  formatConfigOutput,
+  isValeConfigErrorCode,
+  summarizeLanguageStatus,
+  toConfigSettingValue,
   resolveEditorBehaviorOptions,
   VALE_CONFIG_FILE_PATTERNS,
   parseValeVersion,
@@ -932,5 +936,101 @@ describe("Vale version thresholds", () => {
     assert.equal(isVersionAtLeast([3, 25, 0], MIN_VALE_CONFIG_DIR_VERSION), false);
     assert.equal(isVersionAtLeast([3, 25, 1], MIN_VALE_CONFIG_DIR_VERSION), true);
     assert.equal(isVersionAtLeast([3, 26, 0], MIN_VALE_CONFIG_DIR_VERSION), true);
+  });
+});
+
+describe("summarizeLanguageStatus", () => {
+  test("reports not running with no clients", () => {
+    const s = summarizeLanguageStatus([], 0);
+    assert.equal(s.text, "Vale: Not running");
+    assert.equal(s.severity, "warning");
+  });
+
+  test("reports ready when every client is ready", () => {
+    const s = summarizeLanguageStatus(
+      [{ name: "a", state: "ready" }, { name: "b", state: "ready" }],
+      0
+    );
+    assert.equal(s.text, "Vale: Ready");
+    assert.equal(s.busy, false);
+  });
+
+  test("starting is busy and outranks ready", () => {
+    const s = summarizeLanguageStatus(
+      [{ name: "a", state: "ready" }, { name: "b", state: "starting" }],
+      0
+    );
+    assert.equal(s.text, "Vale: Starting");
+    assert.equal(s.busy, true);
+  });
+
+  test("a failed client outranks configuration errors and names the folder", () => {
+    const s = summarizeLanguageStatus(
+      [{ name: "docs", state: "error", detail: "spawn ENOENT" }],
+      3
+    );
+    assert.equal(s.text, "Vale: Error");
+    assert.equal(s.severity, "error");
+    assert.equal(s.detail, "docs: spawn ENOENT");
+  });
+
+  test("configuration errors are pluralised and outrank starting", () => {
+    const one = summarizeLanguageStatus([{ name: "a", state: "starting" }], 1);
+    assert.equal(one.text, "Vale: Configuration error");
+    assert.match(one.detail, /^1 configuration problem - /);
+    const many = summarizeLanguageStatus([{ name: "a", state: "ready" }], 2);
+    assert.match(many.detail, /^2 configuration problems - /);
+  });
+});
+
+describe("isValeConfigErrorCode", () => {
+  test("matches E-codes only", () => {
+    assert.equal(isValeConfigErrorCode("E201"), true);
+    assert.equal(isValeConfigErrorCode({ value: "E100" }), true);
+    assert.equal(isValeConfigErrorCode("Vale.Spelling"), false);
+    assert.equal(isValeConfigErrorCode("E"), false);
+    assert.equal(isValeConfigErrorCode(201), false);
+    assert.equal(isValeConfigErrorCode(undefined), false);
+  });
+});
+
+describe("toConfigSettingValue", () => {
+  test("uses a forward-slash relative path inside the workspace", () => {
+    assert.equal(
+      toConfigSettingValue("/w/proj/.config/vale.ini", "/w/proj"),
+      ".config/vale.ini"
+    );
+  });
+
+  test("keeps an absolute path outside the workspace", () => {
+    assert.equal(toConfigSettingValue("/elsewhere/vale.ini", "/w/proj"), "/elsewhere/vale.ini");
+  });
+
+  test("does not treat a sibling with a shared prefix as inside", () => {
+    assert.equal(toConfigSettingValue("/w/proj-other/v.ini", "/w/proj"), "/w/proj-other/v.ini");
+  });
+
+  test("keeps the path absolute with no workspace", () => {
+    assert.equal(toConfigSettingValue("/a/vale.ini", undefined), "/a/vale.ini");
+  });
+});
+
+describe("formatConfigOutput", () => {
+  test("pretty-prints JSON", () => {
+    const out = formatConfigOutput('{"RootINI":"/p/.vale.ini","Paths":["/s"]}');
+    assert.equal(out.language, "json");
+    assert.match(out.content, /^\{\n  "RootINI": "\/p\/\.vale\.ini",/);
+  });
+
+  test("skips warning text printed before the JSON object", () => {
+    const out = formatConfigOutput('warning: something\n{"a":1}');
+    assert.equal(out.language, "json");
+    assert.equal(out.content, '{\n  "a": 1\n}\n');
+  });
+
+  test("falls back to plain text when it is not JSON", () => {
+    const out = formatConfigOutput("not json at all");
+    assert.equal(out.language, "plaintext");
+    assert.equal(out.content, "not json at all\n");
   });
 });
