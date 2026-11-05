@@ -28,8 +28,9 @@ export const DEFAULT_DEBOUNCE_MS = 300;
 /**
  * Normalises the editor-behaviour settings sent to vale-ls
  * (`lintOnChange`, `debounceMs`, `showMetrics`). vale-ls treats an *absent*
- * `lintOnChange`/`showMetrics` as on, so they must always be sent explicitly
- * for the documented `false` defaults to apply. `debounceMs` falls back to
+ * `lintOnChange`/`showMetrics` as on, so they are always sent explicitly:
+ * `lintOnChange` defaults to on (the long-standing behaviour users expect),
+ * `showMetrics` to off. `debounceMs` falls back to
  * the default unless it is a finite, non-negative number, and is rounded to
  * a whole millisecond (vale-ls parses it as an unsigned integer).
  */
@@ -40,7 +41,7 @@ export function resolveEditorBehaviorOptions(raw: {
 }): { lintOnChange: boolean; debounceMs: number; showMetrics: boolean } {
   const debounce = raw.debounceMs;
   return {
-    lintOnChange: raw.lintOnChange ?? false,
+    lintOnChange: raw.lintOnChange ?? true,
     debounceMs:
       typeof debounce === "number" && Number.isFinite(debounce) && debounce >= 0
         ? Math.round(debounce)

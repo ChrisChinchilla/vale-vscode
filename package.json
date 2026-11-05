@@ -168,9 +168,9 @@
           "vale.valeCLI.lintOnChange": {
             "scope": "resource",
             "type": "boolean",
-            "default": false,
+            "default": true,
             "order": 1,
-            "markdownDescription": "Lint as you type, rather than only when a file is saved. Changing this restarts the language server."
+            "markdownDescription": "Lint as you type. If disabled, Vale still lints when a file is opened and when it is saved. Changing this restarts the language server."
           },
           "vale.valeCLI.debounceMs": {
             "scope": "resource",

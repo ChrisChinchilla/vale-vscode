@@ -11,21 +11,30 @@ save by default".
 
 ## Fix
 - `resolveEditorBehaviorOptions` (`src/utils.ts`, unit tested) normalises the
-  three values: booleans default to `false`; `debounceMs` must be a finite
-  number >= 0 (rounded), else 300.
+  three values: `lintOnChange` defaults to `true`, `showMetrics` to `false`;
+  `debounceMs` must be a finite number >= 0 (rounded), else 300.
 - `buildValeConfig` (`src/config.ts`) spreads the result into
   `ValeInitializationOptions`, so they are always sent explicitly.
 - Added to `VALE_CONFIG_SETTINGS` (`src/languageServer.ts`) so changing them
   restarts the client (vale-ls reads them from the options at start).
 
-## Behaviour change to flag in release notes
-Existing users who never touched these settings previously got
-lint-as-you-type and the metrics lens by accident. After this change they get
-lint-on-save and no lens, until they enable the settings. The alternative
-(flip the package.json defaults to true) was rejected because it would
-contradict the README and the original intent.
+## Decision: lintOnChange defaults to TRUE (revised)
+The first version honoured the old documented default (`false`). In use,
+underlines stopped showing in the editor while the Problems panel still
+listed issues, because diagnostics went stale between saves. Users have had
+lint-as-you-type for years, so the default is now `true` (package.json, README,
+`resolveEditorBehaviorOptions`). `showMetrics` stays `false` (the code lens was
+only ever on by accident).
+
+## Lint when lintOnChange is off
+vale-ls lints on `didOpen` and on `didSave` (it advertises
+`save.includeText`) regardless of `lintOnChange`; the setting only gates the
+debounced lint in `didChange`. So with it off, an initial lint still runs when
+a document opens, and underlines update on save. No client change was needed.
+Not verified in a real host: that the open-time underlines survive edits until
+the next save.
 
 ## Not verified
-Not exercised in a real extension host. Check: with defaults, typing does not
-re-lint until save and no metrics lens appears; enabling each setting takes
-effect after the automatic restart.
+Not exercised in a real extension host. Check: with defaults, underlines
+update as you type; with `lintOnChange` off, underlines appear on open and
+refresh on save; no metrics lens by default.

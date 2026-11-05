@@ -4,22 +4,21 @@ Release notes live on the GitHub Releases page (see README "Changelog"), not
 in a file. Paste and edit this when cutting the release; delete entries once
 shipped.
 
-## Behaviour change: editor settings now apply
+## Behaviour change: metrics code lens off by default
 `vale.valeCLI.lintOnChange`, `vale.valeCLI.debounceMs` and
 `vale.valeCLI.showMetrics` were documented but never reached the language
-server, which treats them as ON when unset. You may have been getting
-lint-as-you-type and the metrics code lens without asking for them. From this
-release the documented defaults apply: Vale lints when you save, and there is
-no metrics lens.
-
-To keep the old behaviour, add to your settings:
+server, which treats them as ON when unset. They are now sent explicitly.
+Linting as you type stays on by default (`lintOnChange` is `true`), but the
+metrics code lens (`showMetrics`) is off unless you enable it:
 
 ```json
 {
-  "vale.valeCLI.lintOnChange": true,
   "vale.valeCLI.showMetrics": true
 }
 ```
+
+If you disable `vale.valeCLI.lintOnChange`, Vale still lints when a file is
+opened and when it is saved.
 
 Changing any of these now restarts the language server automatically.
 

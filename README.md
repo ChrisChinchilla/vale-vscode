@@ -126,7 +126,7 @@ Use **Vale: Show Diagnostics** to see the extension-host location, platform/libc
 
 If no problems appear, work through these checks:
 
-1. **Save the file.** Linting runs on save by default. Enable `vale.valeCLI.lintOnChange` to lint as you type. You still need to save new files first.
+1. **Save the file.** Vale lints as you type by default. If you disable `vale.valeCLI.lintOnChange`, it still lints when a file is opened and when it is saved. You still need to save new files first.
 2. **Check the active configuration.** Run **Vale: Show Configuration** from the command palette. Confirm that Vale finds your `.vale.ini` and that it enables styles for the file's extension. Set `vale.valeCLI.config` if you need to select a specific configuration.
 3. **Sync packages.** If your `.vale.ini` declares packages, run **Vale: Sync** to download them. These commands require a trusted workspace.
 4. **Check diagnostic settings.** Make sure `vale.valeCLI.minAlertLevel` does not hide the alerts you expect. For spelling alerts, enable `vale.enableSpellcheck` and a spelling style in your Vale configuration.
@@ -156,7 +156,7 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.docker.enabled` (default: `false`): Run Vale inside a Docker container instead of a local install. See [Using Vale via Docker](#using-vale-via-docker) above.
 - `vale.docker.image` (default: `jdkato/vale`): Docker image to run Vale from.
 - `vale.docker.extraArgs` (default: `[]`): Extra arguments spliced into `docker run` before the image name.
-- `vale.valeCLI.lintOnChange` (default: `false`): Lint as you type, rather than only when a file is saved. Changing it restarts the language server.
+- `vale.valeCLI.lintOnChange` (default: `true`): Lint as you type. When disabled, Vale still lints when a file is opened and when it is saved. Changing it restarts the language server.
 - `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled. Must be zero or greater.
 - `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on). Requires vale-ls v0.5.0 or later, which the extension installs.
 

@@ -878,7 +878,7 @@ describe("VALE_CONFIG_FILE_GLOB", () => {
 describe("resolveEditorBehaviorOptions", () => {
   test("defaults to the documented values when nothing is set", () => {
     assert.deepEqual(resolveEditorBehaviorOptions({}), {
-      lintOnChange: false,
+      lintOnChange: true,
       debounceMs: DEFAULT_DEBOUNCE_MS,
       showMetrics: false,
     });
