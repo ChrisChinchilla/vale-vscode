@@ -23,16 +23,20 @@ import {
   parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
+  buildDocumentSelectorPatterns,
   buildValeConfigArgs,
   formatProbeResult,
   isProbeSuccessful,
   capDiagnostics,
   isUnsupportedLinuxLibc,
-  resolveValeBinaryPath,
   SharedRegistry,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
-import { buildValeConfig, resolveValeExecutionOptions } from "./config";
+import {
+  buildValeConfig,
+  resolveValeExecutionOptions,
+  resolveValeSourceForFolder,
+} from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
 import { ClientLifecycleQueue, usesConfigFile } from "./clientLifecycle";
 import { isServerReplaceFix } from "./codeActions";
@@ -41,7 +45,7 @@ import {
   getWindowsDockerProxy,
 } from "./docker";
 import { clearClientStatus, getValeOutputChannel, setClientStatus } from "./ui";
-import { getValeVersionOutput, probeExecutable } from "./cli";
+import { getValeConfig, getValeVersionOutput, probeExecutable } from "./cli";
 
 import {
   ExecuteCommandRequest,
@@ -424,6 +428,25 @@ export function hasActiveClients(): boolean {
 }
 
 /**
+ * Runs the language server's own `cli.sync` for `folder`'s client (the
+ * no-folder client when `folder` is undefined). The server syncs with the
+ * Vale and configuration it lints with. Resolves once the sync has finished,
+ * `false` if that folder has no running client; the server reports the
+ * result itself with a message.
+ */
+export async function syncViaLanguageServer(
+  folder?: vscode.WorkspaceFolder
+): Promise<boolean> {
+  const client = clients.get(clientKeyFor(folder));
+  if (!client || client.state !== State.Running) return false;
+  await client.sendRequest(ExecuteCommandRequest.type, {
+    command: "cli.sync",
+    arguments: [],
+  });
+  return true;
+}
+
+/**
  * Stops and forgets the client registered under `key`, if any. Used both to
  * tear a folder's client down on removal and to guard against double
  * activation.
@@ -478,19 +501,19 @@ async function startClient(
 
   const windowsProxy =
     process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
+  const installDir = getInstallDir(context);
+  const source = resolveValeSourceForFolder(configuration, workspaceRoot, installDir);
   const execution = resolveValeExecutionOptions(
     configuration,
     workspaceRoot,
+    installDir,
     process.platform,
     windowsProxy?.path,
     windowsProxy?.unavailableReason
   );
-  // Leave this unset when no custom path is configured so vale-ls can still
-  // honor installVale and manage its own Vale binary.
-  const rawValeBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
-  let valeBinaryPath = rawValeBinaryPath
-    ? resolveValeBinaryPath(rawValeBinaryPath, workspaceRoot, vscode.workspace.isTrusted)
-    : undefined;
+  // Unset only when the managed copy is in use, so vale-ls downloads and runs
+  // its own; otherwise the configured or PATH Vale is pinned.
+  let valeBinaryPath = source.languageServerPath;
   if (execution.dockerUnavailableReason) {
     vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
   }
@@ -510,10 +533,11 @@ async function startClient(
     configuration,
     workspaceRoot,
     valeBinaryPath,
-    Boolean(execution.docker)
+    Boolean(execution.docker),
+    source.installVale
   );
   logDiagnostic(
-    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
+    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : `${source.source}: ${execution.binaryPath}`}`
   );
   if (execution.docker && valeBinaryPath) {
     void logDockerPreflight(
@@ -559,9 +583,24 @@ async function startClient(
     debug: { command: serverPath, args: tempArgs, options: executableOptions },
   };
 
-  const documentSelector: LanguageClientOptions["documentSelector"] = folder
-    ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
-    : [{ scheme: "file", language: "*" }];
+  // Only send files the Vale config can lint (its section globs and
+  // [formats]), falling back to every file when the config can't be read -
+  // for example before the managed Vale is first installed.
+  const selectorPatterns = buildDocumentSelectorPatterns(
+    workspaceRoot,
+    await getValeConfig(
+      workspaceRoot ?? process.cwd(),
+      execution,
+      valeConfig.configPath,
+      valeConfig.noGlobal
+    )
+  );
+  logDiagnostic(`Document selector: ${selectorPatterns?.join(", ") ?? "all files"}`);
+  const documentSelector: LanguageClientOptions["documentSelector"] = selectorPatterns
+    ? selectorPatterns.map((pattern) => ({ scheme: "file", pattern }))
+    : folder
+      ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
+      : [{ scheme: "file", language: "*" }];
 
   const clientOptions: LanguageClientOptions = {
     initializationOptions: valeConfig,

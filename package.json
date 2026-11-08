@@ -111,7 +111,7 @@
             "type": "boolean",
             "default": false,
             "order": 2,
-            "markdownDescription": "Let the language server download and update its own copy of Vale. If disabled, a `vale` executable must be on your `$PATH` (or set `#vale.valeCLI.path#`), and Vale needs an accessible `.vale.ini`."
+            "markdownDescription": "Always use the copy of Vale that the language server downloads and keeps up to date, even if Vale is installed. By default the extension uses the Vale on your `$PATH`, and only falls back to the managed copy when there isn't one. Ignored when `#vale.valeCLI.path#` is set or `#vale.docker.enabled#` is true. **Vale: Install or Update Vale** only affects the managed copy."
           },
           "vale.valeCLI.config": {
             "scope": "resource",
@@ -134,18 +134,25 @@
             "order": 5,
             "markdownDescription": "Run `vale sync` when the language server starts, to download the packages your configuration lists."
           },
-          "vale.docker.enabled": {
+          "vale.valeCLI.syncViaLanguageServer": {
             "scope": "resource",
             "type": "boolean",
             "default": false,
             "order": 6,
+            "markdownDescription": "Run **Vale: Sync** through the language server instead of running `vale sync` directly, so it uses exactly the Vale and configuration the server lints with. Sync then can't be cancelled and its progress isn't shown in the output channel; the server reports the result in a message. This already happens when there is no Vale on your `$PATH`, so only the managed copy exists."
+          },
+          "vale.docker.enabled": {
+            "scope": "resource",
+            "type": "boolean",
+            "default": false,
+            "order": 7,
             "markdownDescription": "Run Vale inside a Docker container instead of a local install. Overrides `#vale.valeCLI.installVale#` and `#vale.valeCLI.path#`. Requires a workspace folder on the local filesystem and Docker installed."
           },
           "vale.docker.image": {
             "scope": "resource",
             "type": "string",
             "default": "jdkato/vale",
-            "order": 7,
+            "order": 8,
             "markdownDescription": "Docker image to run Vale from. Only used when `#vale.docker.enabled#` is true."
           },
           "vale.docker.extraArgs": {
@@ -155,7 +162,7 @@
               "type": "string"
             },
             "default": [],
-            "order": 8,
+            "order": 9,
             "markdownDescription": "Extra arguments spliced into `docker run` before the image name, e.g. an additional `-v` mount for a styles directory that lives outside the workspace. Only used when `#vale.docker.enabled#` is true."
           }
         }
@@ -282,6 +289,26 @@
         "title": "Advanced",
         "order": 4,
         "properties": {
+          "vale.startOnLanguages": {
+            "scope": "window",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "markdown",
+              "mdx",
+              "plaintext",
+              "restructuredtext",
+              "asciidoc",
+              "html",
+              "xml",
+              "latex",
+              "org"
+            ],
+            "order": 0,
+            "markdownDescription": "Language IDs that start the Vale language server when a file in that language is open. The server also starts when the workspace has a Vale config file (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`), when `#vale.valeCLI.config#` is set (including outside the workspace), or when you run a Vale command. Selecting a configuration while idle also starts the server. Add IDs such as `go` or `python` to lint comments in code files, or use `[\"*\"]` to always start. Changing it starts the server if a matching file is already open."
+          },
           "vale.trace.server": {
             "scope": "window",
             "type": "string",

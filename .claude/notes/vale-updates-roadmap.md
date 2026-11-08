@@ -46,3 +46,10 @@ vale-ls defaults: lint-on-change on, debounce 300ms, metrics code lens on.
 - **Open Vale Settings command**: opens Settings filtered to this extension
   (`workbench.action.openSettings` with `@ext:<publisher>.vale-vscode`).
   Trivial to build; deferred pending a decision on whether to add it.
+
+## Backlog: Vale source selection (think more before building)
+Recorded in `PROJECT_AUDIT.md` (Efficiency). Default is now "Vale on PATH,
+else managed"; open questions: confirm before auto-downloading, show source
+and version in the status item, warn on PATH-vs-managed version mismatch,
+per-folder choice, selector after first managed install. Design and
+trade-offs: `lazy-activation-and-cli-runner.md`.

@@ -17,8 +17,10 @@ import {
   startClientsForCurrentWorkspace,
   stopAllClients,
 } from "./languageServer";
+import { killActiveValeProcesses } from "./cli";
 import { registerCommands } from "./commands";
 import { registerCodeActions } from "./codeActions";
+import { VALE_CONFIG_FILE_GLOB, shouldStartForLanguages } from "./utils";
 
 /**
  * Extension activation/deactivation - wires the other modules together but
@@ -28,6 +30,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const output = createValeOutputChannel(context);
   createReadabilitySurfaces(context);
   createLanguageStatus(context);
+  context.subscriptions.push({ dispose: killActiveValeProcesses });
   // The status bar item reflects a single on-demand Show Metrics run, so
   // switching files makes it stale - hide it until re-run for the new file.
   context.subscriptions.push(
@@ -58,7 +61,9 @@ export async function activate(context: ExtensionContext): Promise<void> {
   }
 
   let watchersRegistered = false;
+  let serverStarted = false;
   const startLanguageServer = async () => {
+    serverStarted = true;
     const serverPath = await ensureLanguageServerBinary(context);
     await startClientsForCurrentWorkspace(serverPath, context);
     if (!watchersRegistered) {
@@ -69,22 +74,79 @@ export async function activate(context: ExtensionContext): Promise<void> {
     }
   };
 
-  registerCommands(context, startLanguageServer);
+  // The server starts lazily: only once the workspace has a Vale config file,
+  // an explicit config is selected, a document in `vale.startOnLanguages`
+  // is open, or a Vale command needs it. A static `activationEvents` list can't follow a setting, so the
+  // extension itself still activates on startup and decides here.
+  const startOnLanguages = () =>
+    vscode.workspace.getConfiguration("vale").get<string[]>("startOnLanguages") ?? [];
+  const isRelevantWorkspace = async (): Promise<boolean> => {
+    const openLanguages = vscode.workspace.textDocuments
+      .filter((doc) => doc.uri.scheme === "file")
+      .map((doc) => doc.languageId);
+    if (shouldStartForLanguages(startOnLanguages(), openLanguages)) return true;
+    const scopes = vscode.workspace.workspaceFolders?.length
+      ? vscode.workspace.workspaceFolders.map((folder) => folder.uri)
+      : [undefined];
+    if (scopes.some((uri) =>
+      vscode.workspace.getConfiguration("vale", uri).get<string>("valeCLI.config")?.trim()
+    )) return true;
+    const configs = await vscode.workspace.findFiles(
+      VALE_CONFIG_FILE_GLOB,
+      "**/node_modules/**",
+      1
+    );
+    return configs.length > 0;
+  };
+  let checking = false;
+  const startIfRelevant = async () => {
+    if (serverStarted || checking) return;
+    checking = true;
+    try {
+      if (!serverStarted && (await isRelevantWorkspace())) {
+        await startWithErrorReporting();
+      }
+    } finally {
+      checking = false;
+    }
+  };
+  const startWithErrorReporting = async () => {
+    try {
+      await startLanguageServer();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      output.appendLine(`[diagnostics] Activation failed: ${detail}`);
+      output.show(true);
+      vscode.window.showErrorMessage(`Vale: ${detail}`, "Show Diagnostics").then(
+        (choice) => {
+          if (choice === "Show Diagnostics") output.show(true);
+        }
+      );
+    }
+  };
+  /** For commands that need the server: starts it now if it hasn't started. */
+  const ensureLanguageServerStarted = async () => {
+    if (!serverStarted) await startWithErrorReporting();
+  };
+
+  registerCommands(context, startLanguageServer, ensureLanguageServerStarted);
   registerCodeActions(context);
 
-  console.log("Starting language server(s)");
-  try {
-    await startLanguageServer();
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    output.appendLine(`[diagnostics] Activation failed: ${detail}`);
-    output.show(true);
-    vscode.window.showErrorMessage(`Vale: ${detail}`, "Show Diagnostics").then(
-      (choice) => {
-        if (choice === "Show Diagnostics") output.show(true);
-      }
-    );
-  }
+  const configWatcher = vscode.workspace.createFileSystemWatcher(VALE_CONFIG_FILE_GLOB);
+  context.subscriptions.push(
+    configWatcher,
+    configWatcher.onDidCreate(() => void startIfRelevant()),
+    vscode.workspace.onDidOpenTextDocument(() => void startIfRelevant()),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration("vale.startOnLanguages") ||
+        event.affectsConfiguration("vale.valeCLI.config")
+      ) void startIfRelevant();
+    })
+  );
+
+  console.log("Checking whether to start the language server");
+  await startIfRelevant();
 
   // Note: we don't run `vale sync` here even when `vale.valeCLI.syncOnStartup`
   // is enabled - that setting is passed to vale-ls via `initializationOptions`

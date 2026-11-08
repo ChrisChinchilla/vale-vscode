@@ -1,13 +1,18 @@
+import * as fs from "node:fs";
+
 import * as vscode from "vscode";
 
 import {
   buildValeFilterExpression,
+  findExecutableOnPath,
+  managedValeExePath,
   resolveConfigPath,
   resolveEditorBehaviorOptions,
   resolveValeBinaryPath,
   resolveValeExecutionSettings,
+  resolveValeSource,
 } from "./utils";
-import type { ValeExecutionOptions } from "./utils";
+import type { ValeExecutionOptions, ValeSourceChoice } from "./utils";
 
 export type { ValeExecutionOptions } from "./utils";
 
@@ -24,6 +29,42 @@ export interface ValeInitializationOptions {
   showMetrics: boolean;
 }
 
+function isFile(candidate: string): boolean {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chooses the Vale that lints this folder (see `resolveValeSource`): the
+ * configured path, else the Vale on `PATH`, else the language server's
+ * managed copy; `vale.valeCLI.installVale` forces the managed copy.
+ * `installDir` is where the language server binary lives.
+ */
+export function resolveValeSourceForFolder(
+  configuration: vscode.WorkspaceConfiguration,
+  workspaceRoot: string | undefined,
+  installDir: string
+): ValeSourceChoice {
+  const rawBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
+  return resolveValeSource({
+    customPath: rawBinaryPath
+      ? resolveValeBinaryPath(rawBinaryPath, workspaceRoot, vscode.workspace.isTrusted) ||
+        undefined
+      : undefined,
+    alwaysManaged: configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
+    pathVale: findExecutableOnPath(
+      "vale",
+      process.env.PATH ?? process.env.Path,
+      process.platform,
+      isFile
+    ),
+    managedExe: managedValeExePath(installDir, process.platform),
+  });
+}
+
 /**
  * Resolves the shared execution mode used by vale-ls and every direct Vale
  * command. Unsupported Docker contexts retain the configured local fallback
@@ -32,16 +73,13 @@ export interface ValeInitializationOptions {
 export function resolveValeExecutionOptions(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
+  installDir: string,
   platform = process.platform,
   windowsProxyPath?: string,
   windowsProxyUnavailableReason?: string
 ): ValeExecutionOptions {
-  const rawBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
-
   return resolveValeExecutionSettings(
-    rawBinaryPath
-      ? resolveValeBinaryPath(rawBinaryPath, workspaceRoot, vscode.workspace.isTrusted)
-      : undefined,
+    resolveValeSourceForFolder(configuration, workspaceRoot, installDir).binaryPath,
     configuration.get<boolean>("vale.docker.enabled") ?? false,
     workspaceRoot,
     platform,
@@ -64,7 +102,8 @@ export function buildValeConfig(
   configuration: vscode.WorkspaceConfiguration,
   workspaceRoot: string | undefined,
   valeBinaryPath?: string,
-  dockerModeActive?: boolean
+  dockerModeActive?: boolean,
+  installValeOverride?: boolean
 ): ValeInitializationOptions {
   const minAlertLevel =
     configuration.get<string>("vale.valeCLI.minAlertLevel") ?? "inherited";
@@ -87,12 +126,14 @@ export function buildValeConfig(
     syncOnStartup:
       configuration.get<boolean>("vale.valeCLI.syncOnStartup") ?? false,
     filter: filterExpression,
+    // `installValeOverride` comes from `resolveValeSourceForFolder`: true only
+    // when the managed copy is in use (forced, or no Vale on PATH).
     // TODO: Build into proper onboarding
     // Installing a locally-managed Vale copy is pointless when Docker mode
     // is running vale inside a container instead.
     installVale: dockerModeActive
       ? false
-      : configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
+      : installValeOverride ?? configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
     valeBinaryPath: valeBinaryPath ?? "",
     noGlobal: configuration.get<boolean>("vale.valeCLI.noGlobal") ?? false,
     ...resolveEditorBehaviorOptions({

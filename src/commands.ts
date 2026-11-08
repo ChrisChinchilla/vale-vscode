@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { ExtensionContext } from "vscode";
 
-import { hasActiveClients } from "./languageServer";
+import { getInstallDir, hasActiveClients, syncViaLanguageServer } from "./languageServer";
 import { getRelevantWorkspaceFolder } from "./workspaceFolders";
 import { addToVocabulary } from "./vocabulary";
 import {
@@ -17,7 +17,7 @@ import {
   getValeOutputChannel,
   showReadabilityResult,
 } from "./ui";
-import { resolveValeExecutionOptions } from "./config";
+import { resolveValeExecutionOptions, resolveValeSourceForFolder } from "./config";
 import {
   buildValeConfigArgs,
   computeFleschKincaidGrade,
@@ -26,6 +26,7 @@ import {
   resolveConfigPath,
   shouldWarnBeforeLinting,
   toConfigSettingValue,
+  shouldSyncViaLanguageServer,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
 import { getWindowsDockerProxy } from "./docker";
@@ -109,6 +110,7 @@ function resolveCommandExecution(
   const execution = resolveValeExecutionOptions(
     configuration,
     workspaceRoot,
+    getInstallDir(context),
     process.platform,
     windowsProxy?.path,
     windowsProxy?.unavailableReason
@@ -136,6 +138,8 @@ interface CommandContext {
   configPath: string;
   noGlobal: boolean;
   workingDir: string;
+  /** True when Sync should go through the language server (see `shouldSyncViaLanguageServer`). */
+  syncViaLanguageServer: boolean;
 }
 
 /**
@@ -161,8 +165,27 @@ async function resolveCommandContext(
   const configPath = resolveCommandConfigPath(configuration, folder?.uri.fsPath);
   const noGlobal = configuration.get<boolean>("vale.valeCLI.noGlobal") ?? false;
   const workingDir = folder?.uri.fsPath ?? fallbackWorkingDir;
+  const source = resolveValeSourceForFolder(
+    configuration,
+    folder?.uri.fsPath,
+    getInstallDir(context)
+  );
+  const syncViaLanguageServer = shouldSyncViaLanguageServer({
+    explicit: configuration.get<boolean>("vale.valeCLI.syncViaLanguageServer") ?? false,
+    dockerActive: Boolean(execution.docker),
+    source: source.source,
+    alwaysManaged: configuration.get<boolean>("vale.valeCLI.installVale") ?? false,
+  });
 
-  return { folder, configuration, execution, configPath, noGlobal, workingDir };
+  return {
+    folder,
+    configuration,
+    execution,
+    configPath,
+    noGlobal,
+    workingDir,
+    syncViaLanguageServer,
+  };
 }
 
 /**
@@ -171,7 +194,8 @@ async function resolveCommandContext(
  */
 export function registerCommands(
   context: ExtensionContext,
-  restartLanguageServer: () => Promise<void>
+  restartLanguageServer: () => Promise<void>,
+  ensureLanguageServerStarted: () => Promise<void>
 ): void {
   const valeOutputChannel = getValeOutputChannel();
 
@@ -235,12 +259,54 @@ export function registerCommands(
     addSelectionToVocabulary("reject.txt")
   );
 
+  // Sync through the language server's `cli.sync`: it can't be cancelled and
+  // only reports the final result (as a message from the server), but it uses
+  // exactly the Vale and configuration the server lints with.
+  let languageServerSyncRunning = false;
+  const runSyncViaLanguageServer = async (folder: vscode.WorkspaceFolder | undefined) => {
+    if (languageServerSyncRunning) {
+      vscode.window.showInformationMessage("Vale: a sync is already running.");
+      return;
+    }
+    languageServerSyncRunning = true;
+    try {
+      valeOutputChannel.appendLine("\nRunning vale sync through the language server...\n");
+      if (!hasActiveClients()) {
+        await ensureLanguageServerStarted();
+      }
+      const ran = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "Vale: Syncing packages",
+        },
+        () => syncViaLanguageServer(folder)
+      );
+      if (!ran) {
+        vscode.window.showWarningMessage(
+          "Vale: the language server is not running for this folder. Run Vale: Restart Language Server first."
+        );
+        return;
+      }
+      valeOutputChannel.appendLine("Language server finished syncing.");
+    } catch (error) {
+      valeOutputChannel.show(true);
+      showCommandError("Sync failed", error);
+    } finally {
+      languageServerSyncRunning = false;
+    }
+  };
+
   // Helper function to run vale sync
   const runValeSync = async () => {
     if (!requireTrustedWorkspace()) return;
 
     const cmdContext = await resolveCommandContext(context, process.cwd());
     if (!cmdContext) return;
+
+    if (cmdContext.syncViaLanguageServer) {
+      await runSyncViaLanguageServer(cmdContext.folder);
+      return;
+    }
 
     try {
       valeOutputChannel.appendLine("\nRunning vale sync...\n");
@@ -442,11 +508,15 @@ export function registerCommands(
   // language-server module re-registers as a VS Code command routed to the
   // active editor's folder. The server installs or updates the Vale it
   // manages and reports the outcome itself ("Vale is up to date.", "Vale vX
-  // installed."); with `vale.valeCLI.path` or Docker it reports that it is
-  // skipping the install instead, since it isn't the one running that Vale.
+  // installed."); with `vale.valeCLI.path`, Docker, or a Vale on PATH (the
+  // default) it reports that it is skipping the install instead, since it
+  // isn't the one running that Vale.
   const installValeCommand = vscode.commands.registerCommand(
     "vale.install",
     async () => {
+      if (!hasActiveClients()) {
+        await ensureLanguageServerStarted();
+      }
       if (!hasActiveClients()) {
         vscode.window.showWarningMessage(
           "Vale: the language server is not running. Run Vale: Restart Language Server first."

@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -35,6 +36,13 @@ import {
   summarizeLanguageStatus,
   toConfigSettingValue,
   resolveEditorBehaviorOptions,
+  valeCommandName,
+  resolveValeSource,
+  shouldSyncViaLanguageServer,
+  findExecutableOnPath,
+  managedValeExePath,
+  shouldStartForLanguages,
+  buildDocumentSelectorPatterns,
   VALE_CONFIG_FILE_PATTERNS,
   parseValeVersion,
   resolveConfigPath,
@@ -943,7 +951,7 @@ describe("summarizeLanguageStatus", () => {
   test("reports not running with no clients", () => {
     const s = summarizeLanguageStatus([], 0);
     assert.equal(s.text, "Vale: Not running");
-    assert.equal(s.severity, "warning");
+    assert.equal(s.severity, "information");
   });
 
   test("reports ready when every client is ready", () => {
@@ -1032,5 +1040,258 @@ describe("formatConfigOutput", () => {
     const out = formatConfigOutput("not json at all");
     assert.equal(out.language, "plaintext");
     assert.equal(out.content, "not json at all\n");
+  });
+});
+
+describe("valeCommandName", () => {
+  test("skips leading flags", () => {
+    assert.equal(valeCommandName(["--config=/a/.vale.ini", "--no-global", "sync"]), "sync");
+    assert.equal(valeCommandName(["ls-metrics", "/a/b.md"]), "ls-metrics");
+  });
+
+  test("falls back when every argument is a flag or there are none", () => {
+    assert.equal(valeCommandName(["--version"]), "--version");
+    assert.equal(valeCommandName([]), "vale");
+  });
+});
+
+describe("package.json manifest", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "..", "package.json"), "utf8")
+  );
+
+  test("editor setting defaults match what is sent to vale-ls", () => {
+    const properties = Object.assign(
+      {},
+      ...manifest.contributes.configuration.map(
+        (section: { properties: object }) => section.properties
+      )
+    );
+    const sent = resolveEditorBehaviorOptions({});
+    for (const key of ["lintOnChange", "debounceMs", "showMetrics"] as const) {
+      assert.equal(properties[`vale.valeCLI.${key}`].default, sent[key], key);
+    }
+  });
+});
+
+describe("resolveValeSource", () => {
+  const managedExe = "/ls/vale_bin/vale";
+
+  test("an explicit path always wins", () => {
+    const choice = resolveValeSource({
+      customPath: "/opt/vale",
+      alwaysManaged: true,
+      pathVale: "/usr/bin/vale",
+      managedExe,
+    });
+    assert.deepEqual(choice, {
+      source: "custom",
+      binaryPath: "/opt/vale",
+      languageServerPath: "/opt/vale",
+      installVale: false,
+    });
+  });
+
+  test("uses the Vale on PATH by default and pins it for vale-ls", () => {
+    const choice = resolveValeSource({
+      alwaysManaged: false,
+      pathVale: "/usr/bin/vale",
+      managedExe,
+    });
+    assert.equal(choice.source, "path");
+    assert.equal(choice.binaryPath, "/usr/bin/vale");
+    assert.equal(choice.languageServerPath, "/usr/bin/vale");
+    assert.equal(choice.installVale, false);
+  });
+
+  test("falls back to the managed copy when there is no Vale on PATH", () => {
+    const choice = resolveValeSource({ alwaysManaged: false, managedExe });
+    assert.deepEqual(choice, {
+      source: "managed",
+      binaryPath: managedExe,
+      languageServerPath: undefined,
+      installVale: true,
+    });
+  });
+
+  test("always-managed ignores the Vale on PATH", () => {
+    const choice = resolveValeSource({
+      alwaysManaged: true,
+      pathVale: "/usr/bin/vale",
+      managedExe,
+    });
+    assert.equal(choice.source, "managed");
+    assert.equal(choice.binaryPath, managedExe);
+    assert.equal(choice.installVale, true);
+  });
+});
+
+describe("findExecutableOnPath", () => {
+  test("returns the first directory that has the file", () => {
+    const found = findExecutableOnPath(
+      "vale",
+      "/a:/b:/c",
+      "linux",
+      (candidate) => candidate === "/b/vale" || candidate === "/c/vale"
+    );
+    assert.equal(found, "/b/vale");
+  });
+
+  test("looks for vale.exe on Windows", () => {
+    const found = findExecutableOnPath(
+      "vale",
+      "C:\\tools;C:\\bin",
+      "win32",
+      (candidate) => candidate === "C:\\bin\\vale.exe"
+    );
+    assert.equal(found, "C:\\bin\\vale.exe");
+  });
+
+  test("returns undefined for an empty or unmatched PATH", () => {
+    assert.equal(findExecutableOnPath("vale", undefined, "linux", () => true), undefined);
+    assert.equal(findExecutableOnPath("vale", "/a::/b", "linux", () => false), undefined);
+  });
+});
+
+describe("managedValeExePath", () => {
+  test("is vale_bin next to the language server", () => {
+    assert.equal(managedValeExePath("/ls", "darwin"), "/ls/vale_bin/vale");
+    assert.equal(managedValeExePath("C:\\ls", "win32"), "C:\\ls\\vale_bin\\vale.exe");
+  });
+});
+
+describe("shouldStartForLanguages", () => {
+  const configured = ["markdown", "plaintext"];
+
+  test("starts when an open document has a listed language", () => {
+    assert.equal(shouldStartForLanguages(configured, ["go", "markdown"]), true);
+  });
+
+  test("does not start for unlisted languages or no documents", () => {
+    assert.equal(shouldStartForLanguages(configured, ["go", "json"]), false);
+    assert.equal(shouldStartForLanguages(configured, []), false);
+  });
+
+  test("a * entry always starts", () => {
+    assert.equal(shouldStartForLanguages(["*"], []), true);
+  });
+});
+
+describe("buildDocumentSelectorPatterns", () => {
+  test("builds patterns from section globs, anchored to the folder", () => {
+    assert.deepEqual(
+      buildDocumentSelectorPatterns("/work/proj", {
+        SBaseStyles: { "*.{md,txt}": ["Vale"], "docs/**/*.rst": ["Vale"] },
+      }),
+      ["/work/proj/**/*.{md,txt}", "/work/proj/docs/**/*.rst"]
+    );
+  });
+
+  test("includes sections with individual checks and deduplicates shared globs", () => {
+    assert.deepEqual(
+      buildDocumentSelectorPatterns("/work/proj", {
+        SBaseStyles: { "*.md": ["Vale"] },
+        SChecks: { "*.md": {}, "*.txt": { "Vale.Spelling": true } },
+      }),
+      ["/work/proj/**/*.md", "/work/proj/**/*.txt"]
+    );
+    assert.deepEqual(
+      buildDocumentSelectorPatterns("/work/proj", {
+        SChecks: { "*.txt": { "Vale.Spelling": true } },
+      }),
+      ["/work/proj/**/*.txt"]
+    );
+  });
+
+  test("global checks and wildcard check sections keep every file", () => {
+    for (const config of [
+      { SBaseStyles: { "*.md": ["Vale"] }, GChecks: { "Vale.Spelling": true } },
+      { SBaseStyles: { "*.md": ["Vale"] }, SChecks: { "*": { "Vale.Spelling": true } } },
+    ]) {
+      assert.equal(buildDocumentSelectorPatterns("/work/proj", config), undefined);
+    }
+  });
+
+  test("adds extensions mapped with [formats]", () => {
+    assert.deepEqual(
+      buildDocumentSelectorPatterns("/work/proj", {
+        SBaseStyles: { "*.md": ["Vale"] },
+        Formats: { mdx: "md" },
+      }),
+      ["/work/proj/**/*.md", "/work/proj/**/*.mdx"]
+    );
+  });
+
+  test("covers every file when the config cannot narrow it", () => {
+    assert.equal(buildDocumentSelectorPatterns("/p", null), undefined);
+    assert.equal(buildDocumentSelectorPatterns("/p", { SBaseStyles: {} }), undefined);
+    assert.equal(
+      buildDocumentSelectorPatterns("/p", { SBaseStyles: { "*": ["Vale"] } }),
+      undefined
+    );
+    assert.equal(
+      buildDocumentSelectorPatterns("/p", {
+        SBaseStyles: { "*.md": ["Vale"] },
+        GBaseStyles: { Vale: true },
+      }),
+      undefined
+    );
+  });
+
+  test("uses forward slashes and works with no folder", () => {
+    assert.deepEqual(
+      buildDocumentSelectorPatterns("C:\\work\\proj\\", {
+        SBaseStyles: { "*.md": ["Vale"] },
+      }),
+      ["C:/work/proj/**/*.md"]
+    );
+    assert.deepEqual(
+      buildDocumentSelectorPatterns(undefined, { SBaseStyles: { "*.md": ["Vale"] } }),
+      ["**/*.md"]
+    );
+  });
+});
+
+describe("shouldSyncViaLanguageServer", () => {
+  const base = {
+    explicit: false,
+    dockerActive: false,
+    source: "path" as const,
+    alwaysManaged: false,
+  };
+
+  test("direct by default, with a Vale on PATH or a custom path", () => {
+    assert.equal(shouldSyncViaLanguageServer(base), false);
+    assert.equal(shouldSyncViaLanguageServer({ ...base, source: "custom" }), false);
+  });
+
+  test("goes through the server when there is no Vale on PATH", () => {
+    assert.equal(shouldSyncViaLanguageServer({ ...base, source: "managed" }), true);
+  });
+
+  test("an explicitly chosen managed copy still syncs directly", () => {
+    assert.equal(
+      shouldSyncViaLanguageServer({ ...base, source: "managed", alwaysManaged: true }),
+      false
+    );
+  });
+
+  test("Docker syncs directly unless the setting asks otherwise", () => {
+    assert.equal(
+      shouldSyncViaLanguageServer({ ...base, source: "managed", dockerActive: true }),
+      false
+    );
+    assert.equal(
+      shouldSyncViaLanguageServer({ ...base, dockerActive: true, explicit: true }),
+      true
+    );
+  });
+
+  test("the setting forces the server route", () => {
+    assert.equal(shouldSyncViaLanguageServer({ ...base, explicit: true }), true);
+    assert.equal(
+      shouldSyncViaLanguageServer({ ...base, source: "custom", explicit: true }),
+      true
+    );
   });
 });
