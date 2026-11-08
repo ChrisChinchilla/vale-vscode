@@ -32,7 +32,7 @@ vale-ls defaults: lint-on-change on, debounce 300ms, metrics code lens on.
 - [x] UI audit items: language status item, Select Configuration File,
       Vale editor submenu, cancellable progress, tree view removal, config as
       JSON, settings reorganisation. See `ui-status-and-settings.md`. Needs
-      manual check in a real host. (Open Vale Settings is under Future work.)
+      manual check in a real host. (Open Vale Settings is done: `vale.openSettings`.)
 
 ### Parked
 - Lint-on-demand CLI mode (server already lints on change/save).
@@ -42,10 +42,26 @@ vale-ls defaults: lint-on-change on, debounce 300ms, metrics code lens on.
 ## Possible follow-up from the watcher work
 - Also watch an explicit `vale.valeCLI.config` path with a non-standard name.
 
-## Future work (owner wants to think about it first)
-- **Open Vale Settings command**: opens Settings filtered to this extension
-  (`workbench.action.openSettings` with `@ext:<publisher>.vale-vscode`).
-  Trivial to build; deferred pending a decision on whether to add it.
+## Ideas backlog (not scheduled)
+UI:
+- Show the Vale in use (source and version) in the language status item.
+- Add a **Select Configuration File** action to the status item, beside the
+  click-through to Show Diagnostics; link "Not running" to **Vale: Open
+  Settings**.
+- First-run prompt before the managed Vale is downloaded when none is found
+  (also in the source-selection backlog below).
+- A download/update channel setting (for example opting in to pre-release
+  vale-ls builds), from the original settings layout proposal.
+Efficiency gaps found while building lazy start and sync routing:
+- `startIfRelevant` (`lifecycle.ts`) ignores a trigger that arrives while the
+  config-file search is running, so a listed-language file opened mid-check
+  can be missed if the search finds nothing. Fix: re-run the check once when a
+  trigger arrives while checking, with a test.
+- **Vale: Sync** syncs only the resolved folder in a multi-root workspace in
+  both routes. A loop over every folder (with the direct route's progress and
+  Cancel) would sync them all.
+- A failed server start is not retried until **Vale: Restart Language
+  Server**; the error message could say so.
 
 ## Backlog: Vale source selection (think more before building)
 Recorded in `PROJECT_AUDIT.md` (Efficiency). Default is now "Vale on PATH,

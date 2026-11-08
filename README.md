@@ -78,6 +78,7 @@ The following commands are available from the command palette (<kbd>Cmd</kbd>/<k
 - The extension watches `.vale.ini`, `_vale.ini` and `.config/vale.ini` (the last supported from Vale 3.25.1) in your workspace. When one is created, changed, or deleted, the Vale language server restarts for that folder so diagnostics in open files refresh without a window reload.
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
 - **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
+- **Vale: Open Settings** opens the Settings editor filtered to this extension's settings.
 - **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures, and the detected Vale version. At startup the extension warns if your Vale is too old for a feature you're using: Vale 3.10.0 or later for the alert-level, spellcheck and filter settings, and Vale 3.25.1 or later to read a `.config/vale.ini`. If you use neither `vale.valeCLI.path` nor Docker, the version shown is for `vale` on your `PATH`, which may differ from the copy the language server installs.
 - **Vale: Add to Accept List** / **Vale: Add to Reject List** add the selected (or right-clicked) word (also under the **Vale** submenu of the editor context menu) to your vocabulary's `accept.txt` or `reject.txt`. They need `vale.vocabPath` set. Also available as quick fixes on spelling alerts.
 
@@ -150,7 +151,7 @@ Once running, the server is only sent files that your Vale config can lint: the 
 
 ## Settings
 
-The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale Linter_). They are grouped into **Setup**, **Linting**, **Vocabulary** and **Advanced** pages.
+The extension offers a number of settings and configuration options (_Preferences > Extensions > Vale Linter_). They are grouped into **Setup**, **Linting**, **Vocabulary**, **Advanced** and **Troubleshooting** pages.
 
 - `vale.valeCLI.installVale` (default: `false`): Always use the copy of Vale the language server downloads and keeps up to date, even if Vale is installed. By default the extension uses the Vale on your `PATH` and only falls back to the managed copy when there isn't one. Ignored when `vale.valeCLI.path` is set or Docker is enabled.
 - `vale.valeCLI.config` (default: empty): Absolute or relative path to a Vale configuration file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`.
@@ -170,12 +171,14 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.startOnLanguages` (default: the languages above): Language IDs that start the language server when a matching file is open. See [When the extension starts](#when-the-extension-starts).
 - `vale.valeCLI.lintOnChange` (default: `true`): Lint as you type. When disabled, Vale still lints when a file is opened and when it is saved. Changing it restarts the language server.
 - `vale.valeCLI.debounceMs` (default: `300`): How long typing has to settle before linting, in milliseconds. Only applies when `vale.valeCLI.lintOnChange` is enabled. Must be zero or greater.
+- `vale.maxNumberOfProblems` (default: `100`): Caps the number of problems shown per file. Applied client-side (vale-ls itself has no such limit), so the file is still linted in full - only what's displayed is trimmed. Set to `0` for no limit.
 - `vale.valeCLI.showMetrics` (default: `false`): Show a code lens with the document's metrics (word count, reading time, and so on). Requires vale-ls v0.5.0 or later, which the extension installs.
 
-### Advanced and debugging settings
+### Troubleshooting settings
 
 - `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server. Output appears in the **Vale Language Server** output channel, separate from **Vale**. Set to `messages` or `verbose` when reporting a bug.
-- `vale.maxNumberOfProblems` (default: `100`): Caps the number of problems shown per file. Applied client-side (vale-ls itself has no such limit), so the file is still linted in full - only what's displayed is trimmed. Set to `0` for no limit.
+
+The troubleshooting commands are **Vale: Show Diagnostics**, **Vale: Show Configuration** and **Vale: Restart Language Server**. **Vale: Open Settings** opens the Settings editor filtered to this extension.
 
 ## Changelog
 

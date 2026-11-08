@@ -85,10 +85,12 @@ The current settings appear lexicographically because they have no explicit orde
 
 ### Additional UI improvements
 
+- [x] Group the troubleshooting settings. `vale.trace.server` now has its own **Troubleshooting** page, leaving **Advanced** for `vale.startOnLanguages`. The proposed "download/update channel" is in the ideas backlog (`.claude/notes/vale-updates-roadmap.md`).
+
 - [x] **Medium: reorganise the settings UI.** Implement the proposed layout above: group settings into **Setup**, **Linting**, **Vocabulary**, and **Advanced** categories (multiple `contributes.configuration` objects with a `title` and `order`), with explicit per-setting `order`. Overlaps with the description, default, and enum-label items below; do those as part of this work. **Done:** four categories (Setup/Linting/Vocabulary/Advanced) with explicit `order`; setting IDs unchanged. See `.claude/notes/ui-status-and-settings.md`.
 - [x] Replace `null` string defaults with valid empty-string defaults. Done.
 - [x] Add explicit order, concise Markdown descriptions, links, integer bounds, and readable enum labels. Done (labels via `enumItemLabels`, `minimum`/`maximum` bounds).
-- [ ] Add native commands for **Select Configuration File** and **Open Vale Settings**. **Restart Language Server** is now implemented. **Select Configuration File** is done; **Open Vale Settings** is deferred (see roadmap), so this stays open.
+- [x] Add native commands for **Select Configuration File** and **Open Vale Settings**. **Restart Language Server**, **Select Configuration File** and **Vale: Open Settings** (`vale.openSettings`, opens Settings filtered with `@ext:<id>`) are all implemented.
 - [x] Deprecate or implement the three no-op settings instead of silently presenting them. Done: all three are implemented.
 - [x] Remove the Explorer tree containing three command buttons. VS Code’s UX guidance explicitly discourages using tree items as command buttons. Keep the commands in the Command Palette and expose only contextual actions where useful. [VS Code View guidelines](https://code.visualstudio.com/api/ux-guidelines/views) Done.
 - [x] Add one `LanguageStatusItem` showing Starting, Ready, or Configuration Error for relevant documents. VS Code identifies this as the preferred surface for active linter/configuration status. [VS Code API](https://code.visualstudio.com/api/references/vscode-api#LanguageStatusItem) Done.

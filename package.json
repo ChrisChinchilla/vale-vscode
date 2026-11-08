@@ -70,6 +70,10 @@
         "icon": "$(output)"
       },
       {
+        "command": "vale.openSettings",
+        "title": "Vale: Open Settings"
+      },
+      {
         "command": "vale.addToAcceptList",
         "title": "Vale: Add to Accept List"
       },
@@ -308,7 +312,14 @@
             ],
             "order": 0,
             "markdownDescription": "Language IDs that start the Vale language server when a file in that language is open. The server also starts when the workspace has a Vale config file (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`), when `#vale.valeCLI.config#` is set (including outside the workspace), or when you run a Vale command. Selecting a configuration while idle also starts the server. Add IDs such as `go` or `python` to lint comments in code files, or use `[\"*\"]` to always start. Changing it starts the server if a matching file is already open."
-          },
+          }
+        }
+      },
+      {
+        "type": "object",
+        "title": "Troubleshooting",
+        "order": 5,
+        "properties": {
           "vale.trace.server": {
             "scope": "window",
             "type": "string",

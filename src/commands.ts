@@ -568,6 +568,12 @@ export function registerCommands(
     }
   );
 
+  // Opens the Settings editor filtered to this extension's settings. Needs no
+  // trust gate: it only shows the UI.
+  const openSettingsCommand = vscode.commands.registerCommand("vale.openSettings", () =>
+    vscode.commands.executeCommand("workbench.action.openSettings", `@ext:${context.extension.id}`)
+  );
+
   const restartLanguageServerCommand = vscode.commands.registerCommand(
     "vale.restartLanguageServer",
     async () => {
@@ -594,6 +600,7 @@ export function registerCommands(
     showMetricsCommand,
     installValeCommand,
     showDiagnosticsCommand,
+    openSettingsCommand,
     restartLanguageServerCommand
   );
 }

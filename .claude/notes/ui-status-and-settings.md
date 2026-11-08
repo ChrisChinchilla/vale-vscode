@@ -1,7 +1,7 @@
 # Language status item, command/UI cleanup, settings reorganisation
 
-Closes the "UI" section of `PROJECT_AUDIT.md` (except Open Vale Settings,
-which is deferred: see `vale-updates-roadmap.md`).
+Closes the "UI" section of `PROJECT_AUDIT.md`. Open Vale Settings was deferred
+at first and added later as `vale.openSettings` (see "Open Settings" below).
 
 ## Language status item (`src/ui.ts`)
 - One `LanguageStatusItem` (`vale.status`, selector `{scheme: "file"}`)
@@ -39,12 +39,18 @@ which is deferred: see `vale-updates-roadmap.md`).
 - Editor context: `vale.editorContext` submenu holds Accept/Reject.
 
 ## Settings (`package.json`)
-Four `configuration` objects (Setup, Linting, Vocabulary, Advanced) with
+Five `configuration` objects (Setup, Linting, Vocabulary, Advanced,
+Troubleshooting; the last holds `vale.trace.server`) with
 `order`. **No setting IDs changed.** `null` string defaults became `""`
 (all readers already used `|| ""`). Added Markdown descriptions,
 `minimum`/`maximum`, `enumItemLabels`, `enumDescriptions`. Keep every
 property in exactly one category (the build has no check; I verified with a
 script that the union equals the old key set).
+
+## Open Settings
+`vale.openSettings` runs `workbench.action.openSettings` with
+`@ext:${context.extension.id}`. No trust gate (it only shows UI). The status
+item could link to it later (see the ideas backlog).
 
 ## Known gaps
 - `vale.install` ("Vale: Install or Update Vale") was declared and documented

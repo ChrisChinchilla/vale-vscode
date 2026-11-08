@@ -68,7 +68,7 @@ Changing any of these now restarts the language server automatically.
   Configuration error; click it for diagnostics.
 - **Removed the Vale panel from the Explorer sidebar.** Every command is
   still in the command palette (Cmd/Ctrl+Shift+P, type "Vale").
-- New **Vale: Select Configuration File** command.
+- New **Vale: Select Configuration File** and **Vale: Open Settings** commands. `vale.trace.server` moved to a new **Troubleshooting** settings page.
 - **Vale: Show Configuration** now opens the configuration as JSON in an
   editor tab instead of the output panel.
 - **Vale: Sync** and the Vale language server download show a cancellable
