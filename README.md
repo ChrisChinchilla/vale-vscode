@@ -9,29 +9,26 @@ The Vale extension for Visual Studio Code and editors based on Visual Studio Cod
 ## Requirements
 
 - VS Code **1.109.0 or later**, or a compatible editor based on that version or later.
-- Vale **3.10.0 or later**. The extension uses the Vale on the extension host's `PATH` if there is one, or the copy at `vale.valeCLI.path`. If neither exists, the language server downloads and keeps its own copy. Set `vale.valeCLI.installVale` to use that managed copy even when Vale is installed. Alternatively, use [Docker](#using-vale-via-docker).
+- Vale **3.10.0 or later**. The extension uses the Vale on the extension host's `PATH` if there is one, or the copy at `vale.valeCLI.path`. If neither exists, the language server downloads and manages its own copy. Set `vale.valeCLI.installVale` to use that managed copy even when you have Vale installed. Alternatively, you can use [Docker](#using-vale-via-docker).
 - An accessible `.vale.ini` configuration with rules enabled for the files you want to check.
-- Internet access on first launch to download the Vale Language Server, and when downloading Vale or syncing packages.
+- Internet access on first launch to download the Vale Language Server, and when downloading Vale or syncing Vale packages.
 
 ## Installation
 
-1. Install [Vale](https://vale.sh/docs/vale-cli/installation/) - **3.10.0 or later** (see note below) or use the extension's options to install Vale automatically.
+1. Install [Vale](https://vale.sh/docs/vale-cli/installation/) - **3.10.0 or later** or use the extension's options to install Vale automatically.
 2. install `vale-vscode` (this extension) via the [Marketplace](https://marketplace.visualstudio.com/items?itemName=chrischinchilla.vale-vscode).
 3. Restart VS Code (recommended).
-
-### Pre-release versions
-
-The Marketplace receives pre-release builds ahead of stable releases. To opt in,
-open the extension's Marketplace page in VS Code and choose **Switch to
-Pre-Release Version**. Switch back at any time with **Switch to Release
-Version**.
 
 > [!WARNING]
 > Vale versions before 3.10.0 don't support the raw filter expressions this extension sends for setting alert levels or toggling spell check, and fail every lint with `filter '...' not found`. This happens even if you never touch either setting, since spell checking defaults to `false`. If your Vale CLI version predates 3.10.0, the extension shows a warning identifying this on startup.
 
+### Pre-release versions
+
+The Marketplace receives pre-release builds ahead of stable releases. To opt in, open the extension's Marketplace page in VS Code and choose **Switch to Pre-Release Version**. Switch back at any time with **Switch to Release Version**.
+
 ## First launch
 
-On first launch the extension downloads the [Vale Language Server](https://github.com/vale-cli/vale-ls) binary, verifies it against a known SHA-256 checksum, and stores it in VS Code's per-extension global storage directory.
+On first launch the extension downloads the [Vale Language Server](https://github.com/vale-cli/vale-ls) binary, verifies its authenticity, and stores it in VS Code's per-extension global storage directory.
 
 ## Features
 
@@ -40,8 +37,9 @@ The extension uses any [configuration](https://vale.sh/docs/topics/config/), [vo
 ### Highlight Vale rule violations in the editor and problems view
 
 ![A screenshot showing the problems highlighted by Vale in the editor](img/vale-vscode-problems-view.png)
+The extension shows any configured Vale rules inline in the editor and in the problems view depending on the settings you set.
 
-**Vale: Show Readability Metrics** computes a Flesch-Kincaid grade level for the active file's saved content and, since readability is document-wide rather than specific to a line, displays it where the `vale.readabilityProblemLocation` setting says to: the status bar (default), inline in the problems view, or both. It doesn't run automatically as you type or save - re-run the command to refresh it.
+In addition, **Vale: Show Readability Metrics** computes a Flesch-Kincaid grade level for the active file's saved content and, since readability is document-wide rather than specific to a line, displays it based on the `vale.readabilityProblemLocation` setting. The status bar (default), inline in the problems view, or both. It doesn't run automatically as you type or save - re-run the command to refresh it.
 
 ### Quick fixes
 
@@ -71,15 +69,17 @@ The language status entry (the `{}` icon in the status bar, next to the language
 
 The following commands are available from the command palette (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>). The Vale panel that used to appear in the Explorer sidebar has been removed:
 
-- **Vale: Sync** downloads and updates the packages defined in your `.vale.ini` file. Progress shows in a notification with a **Cancel** button. When there is no Vale on your `PATH`, or `vale.valeCLI.syncViaLanguageServer` is on, Sync runs through the language server instead: it uses exactly the Vale and configuration the server lints with, but it can't be cancelled and the server reports the result in a message. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see Settings below).
-- **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages. It does nothing when the extension is using your own Vale (the one on `PATH`, `vale.valeCLI.path`, or Docker), because the language server isn't running that copy; it reports that it is skipping the install. Update a `PATH` copy with your package manager, or set `vale.valeCLI.installVale` to switch to the managed copy.
+- **Vale: Sync** downloads and updates the packages defined in your `.vale.ini` file. Progress shows in a notification with a **Cancel** button. When there is no Vale on your `PATH`, or `vale.valeCLI.syncViaLanguageServer` is on, Sync runs through the language server instead. In this case, sync uses the Vale and configuration the language server lints with, but you can't cancel the process and the server reports the result in a message. You can also enable automatic syncing on startup using the `vale.valeCLI.syncOnStartup` setting (see [Settings](#settings)).
+- **Vale: Install or Update Vale** installs or updates the Vale binary the language server manages. It does nothing when the extension is using your own Vale (on `PATH`, `vale.valeCLI.path`, or Docker). Update a `PATH` copy with your package manager, or set `vale.valeCLI.installVale` to switch to the managed copy.
 - **Vale: Show Configuration** runs `vale ls-config` and opens the active Vale configuration as JSON in an editor tab.
 - **Vale: Select Configuration File** picks the file stored in `vale.valeCLI.config` (relative to the workspace folder when possible), or clears it to use Vale's automatic discovery. In a multi-root workspace it is saved for the active file's folder.
-- The extension watches `.vale.ini`, `_vale.ini` and `.config/vale.ini` (the last supported from Vale 3.25.1) in your workspace. When one is created, changed, or deleted, the Vale language server restarts for that folder so diagnostics in open files refresh without a window reload.
+
+    - The extension watches `.vale.ini`, `_vale.ini` and `.config/vale.ini` (the last supported from Vale 3.25.1) in your workspace. When you create, change, or delete one, the Vale language server restarts for that folder so diagnostics in open files refresh without a window reload.
+
 - **Vale: Show Readability Metrics** reports the active file's readability metrics.
-- **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the window.
+- **Vale: Restart Language Server** retries installation if needed and restarts all workspace clients without reloading the VSCode window.
 - **Vale: Open Settings** opens the Settings editor filtered to this extension's settings.
-- **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, and language-server startup failures, and the detected Vale version. At startup the extension warns if your Vale is too old for a feature you're using: Vale 3.10.0 or later for the alert-level, spellcheck and filter settings, and Vale 3.25.1 or later to read a `.config/vale.ini`. If you use neither `vale.valeCLI.path` nor Docker, the version shown is for `vale` on your `PATH`, which may differ from the copy the language server installs.
+- **Vale: Show Diagnostics** shows the extension-host location, platform/libc, workspace and config paths, selected Vale execution mode, language-server startup failures, and the detected Vale version. At startup the extension warns if your Vale version is too old for a feature you're using: Vale 3.10.0 or later for the alert-level, spellcheck and filter settings, and Vale 3.25.1 or later to read a `.config/vale.ini`. If you use neither `vale.valeCLI.path` nor Docker, the version shown is for `vale` on your `PATH`, which may differ from the copy the language server installs.
 - **Vale: Add to Accept List** / **Vale: Add to Reject List** add the selected (or right-clicked) word (also under the **Vale** submenu of the editor context menu) to your vocabulary's `accept.txt` or `reject.txt`. They need `vale.vocabPath` set. Also available as quick fixes on spelling alerts.
 
 ### Multi-root workspaces
@@ -110,7 +110,7 @@ While Docker mode is enabled, the extension ignores `vale.valeCLI.installVale` a
 
 ### Workspace Trust
 
-The extension supports [Workspace Trust](https://code.visualstudio.com/docs/editing/workspace-trust) in Restricted Mode ("limited" support), linting and highlighting keep working with the following caveats:
+The extension supports [Workspace Trust](https://code.visualstudio.com/docs/editing/workspace-trust). In Restricted Mode ("limited" support), linting and highlighting keep working with the following caveats:
 
 - `vale.valeCLI.path`, `vale.valeCLI.config`, `vale.valeCLI.syncOnStartup`, and all `vale.docker.*` settings are locked to their user-level value. Workspace-level overrides (e.g. in `.vscode/settings.json`) are ignored until you trust the workspace.
 - **Vale: Sync**, **Vale: Show Configuration**, **Vale: Show Readability Metrics**, and the vocabulary add commands are disabled until you trust the workspace, since they run the Vale executable directly.
@@ -127,7 +127,7 @@ Use **Vale: Show Diagnostics** to see the extension-host location, platform/libc
 
 The extension starts when your workspace contains a Vale config file (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`), when `vale.valeCLI.config` is set, when you open a Markdown, MDX, plain text, reStructuredText, AsciiDoc, HTML, XML, LaTeX or Org file, or when you run any Vale command. In other workspaces it stays idle.
 
-If no problems appear, work through these checks:
+If no problems appear, try the following:
 
 1. **Save the file.** Vale lints as you type by default. If you disable `vale.valeCLI.lintOnChange`, it still lints when a file is opened and when it is saved. You still need to save new files first.
 2. **Check the active configuration.** Run **Vale: Show Configuration** from the command palette. Confirm that Vale finds your `.vale.ini` and that it enables styles for the file's extension. Set `vale.valeCLI.config` if you need to select a specific configuration.
@@ -140,14 +140,6 @@ With Docker mode enabled, the **Vale** output channel also logs the exit code an
 If Vale cannot start, or the CLI works but the extension does not, run **Vale: Show Diagnostics** to inspect the executable mode, paths, and startup errors. If the extension cannot find the executable, set `vale.valeCLI.path` to its absolute path in the extension host's environment. After fixing the issue, run **Vale: Restart Language Server** to retry installation if needed and restart the clients.
 
 If the problem persists, [open an issue](https://github.com/ChrisChinchilla/vale-vscode/issues) with your editor and extension versions, Vale version, operating system, whether you use Docker or a remote workspace, relevant diagnostic output, and a minimal configuration and sample file that reproduce it. Remove sensitive paths or content before sharing.
-
-## When the extension starts
-
-The Vale language server starts only when it is needed: when your workspace has a Vale config file (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`), when `vale.valeCLI.config` is set (including a configuration outside the workspace), when you open a file whose language is listed in `vale.startOnLanguages`, or when you run a Vale command. Selecting a configuration while idle also starts the server. In other workspaces it stays idle and the status item shows **Vale: Not running**.
-
-`vale.startOnLanguages` defaults to `markdown`, `mdx`, `plaintext`, `restructuredtext`, `asciidoc`, `html`, `xml`, `latex` and `org`. If you lint comments in code files (for example `go` or `python`) using only a user-level `~/.vale.ini`, add those language IDs to the setting, or set it to `["*"]` to always start the server as earlier versions did.
-
-Once running, the server is only sent files that your Vale config can lint: the file patterns in sections that enable styles or individual rules (`[*.md]`, `[docs/**/*.rst]`) and the extensions mapped in `[formats]`. If the config has no sections, applies styles or individual rules globally, or can't be read, every file is sent, as before. Editing the config restarts the server so the list updates.
 
 ## Settings
 
@@ -179,6 +171,14 @@ The extension offers a number of settings and configuration options (_Preference
 - `vale.trace.server` (default: `off`): Trace the JSON-RPC traffic between VS Code and the Vale Language Server. Output appears in the **Vale Language Server** output channel, separate from **Vale**. Set to `messages` or `verbose` when reporting a bug.
 
 The troubleshooting commands are **Vale: Show Diagnostics**, **Vale: Show Configuration** and **Vale: Restart Language Server**. **Vale: Open Settings** opens the Settings editor filtered to this extension.
+
+## When the extension starts
+
+The Vale language server starts only when it is needed. When your workspace has a Vale config file (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`), when `vale.valeCLI.config` is set (including a configuration outside the workspace), when you open a file whose language is listed in `vale.startOnLanguages`, or when you run a Vale command. Selecting a configuration while idle also starts the server. In other workspaces it stays idle and the status item shows **Vale: Not running**.
+
+`vale.startOnLanguages` defaults to `markdown`, `mdx`, `plaintext`, `restructuredtext`, `asciidoc`, `html`, `xml`, `latex` and `org`. If you lint comments in code files (for example `go` or `python`) using only a user-level `~/.vale.ini`, add those language IDs to the setting, or set it to `["*"]` to always start the server as earlier versions did.
+
+Once running, the server is only sent files that your Vale config can lint: the file patterns in sections that enable styles or individual rules (`[*.md]`, `[docs/**/*.rst]`) and the extensions mapped in `[formats]`. If the config has no sections, applies styles or individual rules globally, or can't be read, every file is sent, as before. Editing the config restarts the server so the list updates.
 
 ## Changelog
 

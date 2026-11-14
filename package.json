@@ -36,7 +36,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Linting still works, but settings that control which executable runs or trigger automatic synchronization (the Vale binary path, config, sync-on-startup, and Docker image/args) are locked to your user-level configuration, and commands that explicitly run a process (Sync, Show Configuration, Show Readability Metrics, vocabulary add) are disabled until the workspace is trusted.",
+      "description": "When running untrusted, linting still works, but settings that control which executable runs or trigger automatic synchronisation (the Vale binary path, config, sync-on-startup, and Docker image and arguments) are locked to your user-level configuration, and commands that explicitly run a process (Sync, Show Configuration, Show Readability Metrics, vocabulary add) are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "vale.valeCLI.path",
         "vale.valeCLI.config",
@@ -108,21 +108,21 @@
             "type": "string",
             "default": "",
             "order": 1,
-            "markdownDescription": "Absolute or relative path to the Vale binary to run, instead of the one the language server manages. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names use `PATH`. Workspace-relative executable paths are ignored in Restricted Mode. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
+            "markdownDescription": "Absolute or relative path to the Vale binary, instead of the one managed by the language server. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. Bare executable names use `PATH`. Workspace-relative executable paths are ignored in Restricted Mode. Leave empty to use `#vale.valeCLI.installVale#` or the copy on your `$PATH`. Ignored when `#vale.docker.enabled#` is true."
           },
           "vale.valeCLI.installVale": {
             "scope": "resource",
             "type": "boolean",
             "default": false,
             "order": 2,
-            "markdownDescription": "Always use the copy of Vale that the language server downloads and keeps up to date, even if Vale is installed. By default the extension uses the Vale on your `$PATH`, and only falls back to the managed copy when there isn't one. Ignored when `#vale.valeCLI.path#` is set or `#vale.docker.enabled#` is true. **Vale: Install or Update Vale** only affects the managed copy."
+            "markdownDescription": "Always use the copy of Vale that the language server downloads and manages, even if Vale is installed elsewhere. By default the extension uses the Vale on your `$PATH`, and only falls back to the managed copy when there isn't one. Ignored when `#vale.valeCLI.path#` is set or `#vale.docker.enabled#` is true. **Vale: Install or Update Vale** only affects the managed copy."
           },
           "vale.valeCLI.config": {
             "scope": "resource",
             "type": "string",
             "default": "",
             "order": 3,
-            "markdownDescription": "Absolute or relative path to a Vale config file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. If empty, Vale's default search is used (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`, looking upwards from the file). Use **Vale: Select Configuration File** to pick one."
+            "markdownDescription": "Absolute or relative path to a Vale config file. Supports `~`, `${workspaceFolder}`, `${userHome}`, and `${env:VAR}`. If empty, uses Vale's default search (`.vale.ini`, `_vale.ini`, or `.config/vale.ini`, searching upwards from the file). Use **Vale: Select Configuration File** to pick one."
           },
           "vale.valeCLI.noGlobal": {
             "scope": "resource",
@@ -136,14 +136,14 @@
             "type": "boolean",
             "default": false,
             "order": 5,
-            "markdownDescription": "Run `vale sync` when the language server starts, to download the packages your configuration lists."
+            "markdownDescription": "Run `vale sync` when the extension and language server starts, to download the packages your configuration lists."
           },
           "vale.valeCLI.syncViaLanguageServer": {
             "scope": "resource",
             "type": "boolean",
             "default": false,
             "order": 6,
-            "markdownDescription": "Run **Vale: Sync** through the language server instead of running `vale sync` directly, so it uses exactly the Vale and configuration the server lints with. Sync then can't be cancelled and its progress isn't shown in the output channel; the server reports the result in a message. This already happens when there is no Vale on your `$PATH`, so only the managed copy exists."
+            "markdownDescription": "Run **Vale: Sync** through the language server instead of running `vale sync` directly, so it uses exactly the Vale and configuration the server lints with. You can't cancel the sync and its progress isn't shown, instead, the server reports the result in a message. This already happens when there is no Vale on your `$PATH`, and only the managed copy exists."
           },
           "vale.docker.enabled": {
             "scope": "resource",
@@ -181,7 +181,7 @@
             "type": "boolean",
             "default": true,
             "order": 1,
-            "markdownDescription": "Lint as you type. If disabled, Vale still lints when a file is opened and when it is saved. Changing this restarts the language server."
+            "markdownDescription": "Lint as you type. If disabled, Vale lints when a file is opened and when it is saved. Changing this restarts the language server."
           },
           "vale.valeCLI.debounceMs": {
             "scope": "resource",
@@ -221,7 +221,7 @@
             "type": "boolean",
             "default": true,
             "order": 4,
-            "markdownDescription": "Enable spell checking with Vale (the built-in `Vale.Spelling` rule)."
+            "markdownDescription": "Enable spell checking with Vale, using the built-in `Vale.Spelling` rule."
           },
           "vale.valeCLI.filter": {
             "scope": "resource",
