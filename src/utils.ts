@@ -12,6 +12,48 @@ import * as path from "node:path";
 export const LSP_TAG = "v0.6.0";
 
 /**
+ * Config file locations Vale discovers on its own. `.config/vale.ini` was
+ * added in Vale 3.25.1 (and recognised by vale-ls v0.6.0). Used to watch for
+ * config edits, so keep it in step with Vale's discovery rules.
+ */
+export const VALE_CONFIG_FILE_PATTERNS = [
+  ".vale.ini",
+  "_vale.ini",
+  ".config/vale.ini",
+];
+
+/** Default `vale.valeCLI.debounceMs`; matches vale-ls's own fallback. */
+export const DEFAULT_DEBOUNCE_MS = 300;
+
+/**
+ * Normalises the editor-behaviour settings sent to vale-ls
+ * (`lintOnChange`, `debounceMs`, `showMetrics`). vale-ls treats an *absent*
+ * `lintOnChange`/`showMetrics` as on, so they are always sent explicitly:
+ * `lintOnChange` defaults to on (the long-standing behaviour users expect),
+ * `showMetrics` to off. `debounceMs` falls back to
+ * the default unless it is a finite, non-negative number, and is rounded to
+ * a whole millisecond (vale-ls parses it as an unsigned integer).
+ */
+export function resolveEditorBehaviorOptions(raw: {
+  lintOnChange?: boolean;
+  debounceMs?: number;
+  showMetrics?: boolean;
+}): { lintOnChange: boolean; debounceMs: number; showMetrics: boolean } {
+  const debounce = raw.debounceMs;
+  return {
+    lintOnChange: raw.lintOnChange ?? true,
+    debounceMs:
+      typeof debounce === "number" && Number.isFinite(debounce) && debounce >= 0
+        ? Math.round(debounce)
+        : DEFAULT_DEBOUNCE_MS,
+    showMetrics: raw.showMetrics ?? false,
+  };
+}
+
+/** A single workspace-wide glob matching every `VALE_CONFIG_FILE_PATTERNS` entry. */
+export const VALE_CONFIG_FILE_GLOB = `**/{${VALE_CONFIG_FILE_PATTERNS.join(",")}}`;
+
+/**
  * SHA-256 digests for every vale-ls ${LSP_TAG} release archive, computed
  * from the published GitHub release assets. These must be updated whenever
  * LSP_TAG changes - see .claude/notes/vale-ls-releases.md for how to
@@ -106,6 +148,15 @@ export function buildValeSpawnOptions(
   cwd: string
 ): SpawnOptionsWithoutStdio {
   return { cwd };
+}
+
+/**
+ * The Vale subcommand in `args` (e.g. `sync`, `ls-config`): the first
+ * argument that is not a flag, so a leading `--config=...` or `--no-global`
+ * is skipped. Falls back to the first argument, or `vale`, for error text.
+ */
+export function valeCommandName(args: readonly string[]): string {
+  return args.find((arg) => !arg.startsWith("-")) ?? args[0] ?? "vale";
 }
 
 /**
@@ -481,6 +532,30 @@ export function isServerReplaceAction(data: ValeAlertData | undefined): boolean 
 export const MIN_VALE_FILTER_VERSION: [number, number, number] = [3, 10, 0];
 
 /**
+ * First Vale release that discovers `.config/vale.ini` on its own (3.25.1).
+ * An older Vale silently ignores such a file, so linting would run with no
+ * project configuration.
+ */
+export const MIN_VALE_CONFIG_DIR_VERSION: [number, number, number] = [3, 25, 1];
+
+/** Formats a version tuple as `X.Y.Z`. */
+export function formatValeVersion(version: [number, number, number]): string {
+  return version.join(".");
+}
+
+/**
+ * One-line summary of a `vale --version` probe for the diagnostics log:
+ * `Vale 3.18.0`, or an explanation when the version couldn't be read.
+ */
+export function describeValeVersion(output: string | null): string {
+  if (!output) return "Vale version could not be determined";
+  const version = parseValeVersion(output);
+  return version
+    ? `Vale ${formatValeVersion(version)}`
+    : `Vale version could not be parsed from "${output.trim()}"`;
+}
+
+/**
  * Parses a `vale --version` output line (e.g. `vale version 3.18.0`, or a
  * bare `3.18.0`) into a `[major, minor, patch]` tuple. Returns `null` for
  * anything that doesn't contain a recognizable `X.Y.Z` version.
@@ -660,4 +735,296 @@ export class SharedRegistry<T> {
   has(name: string): boolean {
     return this.entries.has(name);
   }
+}
+
+/** Lifecycle state of one vale-ls client (one per workspace folder). */
+export type ClientState = "starting" | "ready" | "error";
+
+export interface ClientStatus {
+  name: string;
+  state: ClientState;
+  detail?: string;
+}
+
+export interface LanguageStatusSummary {
+  text: string;
+  detail: string;
+  severity: "information" | "warning" | "error";
+  busy: boolean;
+}
+
+/**
+ * Collapses every client's state (plus the count of open configuration
+ * errors reported by vale-ls) into the single Language Status entry shown
+ * for Vale. Failures outrank configuration errors, which outrank "starting".
+ */
+export function summarizeLanguageStatus(
+  clients: readonly ClientStatus[],
+  configErrorCount: number
+): LanguageStatusSummary {
+  const failed = clients.filter((c) => c.state === "error");
+  if (failed.length > 0) {
+    return {
+      text: "Vale: Error",
+      detail: failed
+        .map((c) => (c.detail ? `${c.name}: ${c.detail}` : c.name))
+        .join("; "),
+      severity: "error",
+      busy: false,
+    };
+  }
+  if (configErrorCount > 0) {
+    return {
+      text: "Vale: Configuration error",
+      detail: `${configErrorCount} configuration problem${configErrorCount === 1 ? "" : "s"} - see the Problems view`,
+      severity: "error",
+      busy: false,
+    };
+  }
+  if (clients.some((c) => c.state === "starting")) {
+    return {
+      text: "Vale: Starting",
+      detail: "The Vale language server is starting",
+      severity: "information",
+      busy: true,
+    };
+  }
+  if (clients.length === 0) {
+    return {
+      text: "Vale: Not running",
+      detail:
+        "No Vale language server is running. It starts when you open a supported file or run a Vale command.",
+      severity: "information",
+      busy: false,
+    };
+  }
+  return {
+    text: "Vale: Ready",
+    detail: "The Vale language server is running",
+    severity: "information",
+    busy: false,
+  };
+}
+
+/**
+ * True for the diagnostic codes vale-ls uses when Vale itself fails to load
+ * a configuration or rule (`E100`, `E201`, ...), as opposed to the rule
+ * names (`Vale.Spelling`, `Microsoft.Contractions`) of ordinary prose alerts.
+ */
+export function isValeConfigErrorCode(
+  code: string | number | { value: string | number } | undefined
+): boolean {
+  const value = typeof code === "object" && code !== null ? code.value : code;
+  return typeof value === "string" && /^E\d+$/.test(value);
+}
+
+/**
+ * Value to store in `vale.valeCLI.config` for a file the user picked:
+ * relative (forward-slash) when it sits inside the workspace folder, so the
+ * setting stays portable across machines, absolute otherwise.
+ */
+export function toConfigSettingValue(
+  selectedPath: string,
+  workspaceRoot: string | undefined
+): string {
+  if (workspaceRoot) {
+    const relative = path.relative(workspaceRoot, selectedPath);
+    if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+      return relative.split(path.sep).join("/");
+    }
+  }
+  return selectedPath;
+}
+
+/**
+ * Prepares `vale ls-config` output for display in an editor tab: pretty
+ * JSON when it parses (tolerating any warning text printed before the
+ * object), plain text otherwise.
+ */
+export function formatConfigOutput(raw: string): {
+  content: string;
+  language: "json" | "plaintext";
+} {
+  const trimmed = raw.trim();
+  const candidates = [trimmed];
+  const brace = trimmed.indexOf("{");
+  if (brace > 0) candidates.push(trimmed.slice(brace));
+  for (const candidate of candidates) {
+    try {
+      return {
+        content: JSON.stringify(JSON.parse(candidate), null, 2) + "\n",
+        language: "json",
+      };
+    } catch {
+      // try the next candidate
+    }
+  }
+  return { content: trimmed + "\n", language: "plaintext" };
+}
+
+/** Where the Vale that lints your files comes from. */
+export type ValeSource = "custom" | "path" | "managed";
+
+export interface ValeSourceChoice {
+  source: ValeSource;
+  /** The executable the extension's own CLI calls (Sync, Show Configuration, ...) run. */
+  binaryPath: string;
+  /** Sent to vale-ls as `valeBinaryPath`; `undefined` lets it use its managed copy. */
+  languageServerPath: string | undefined;
+  /** Sent to vale-ls as `installVale`: whether it downloads its own copy. */
+  installVale: boolean;
+}
+
+/**
+ * Chooses which Vale to run. An explicit `vale.valeCLI.path` always wins;
+ * otherwise the Vale on `PATH` is used, unless `alwaysManaged`
+ * (`vale.valeCLI.installVale`) asks for the language server's own copy, which
+ * is also the fallback when there is no Vale on `PATH`. The `PATH` copy has
+ * to be pinned explicitly because vale-ls prefers a managed copy that already
+ * exists over `PATH`.
+ */
+export function resolveValeSource(input: {
+  customPath?: string;
+  alwaysManaged: boolean;
+  pathVale?: string;
+  managedExe: string;
+}): ValeSourceChoice {
+  if (input.customPath) {
+    return {
+      source: "custom",
+      binaryPath: input.customPath,
+      languageServerPath: input.customPath,
+      installVale: false,
+    };
+  }
+  if (!input.alwaysManaged && input.pathVale) {
+    return {
+      source: "path",
+      binaryPath: input.pathVale,
+      languageServerPath: input.pathVale,
+      installVale: false,
+    };
+  }
+  return {
+    source: "managed",
+    binaryPath: input.managedExe,
+    languageServerPath: undefined,
+    installVale: true,
+  };
+}
+
+/**
+ * The first `name` (`name.exe` on Windows) in `pathEnv` for which `isFile`
+ * is true, or `undefined`.
+ */
+export function findExecutableOnPath(
+  name: string,
+  pathEnv: string | undefined,
+  platform: string,
+  isFile: (candidate: string) => boolean
+): string | undefined {
+  if (!pathEnv) return undefined;
+  const windows = platform === "win32";
+  const pathApi = windows ? path.win32 : path.posix;
+  const fileName = windows ? `${name}.exe` : name;
+  for (const dir of pathEnv.split(windows ? ";" : ":")) {
+    if (!dir) continue;
+    const candidate = pathApi.join(dir, fileName);
+    if (isFile(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Where vale-ls keeps its managed Vale: a `vale_bin` folder next to its own
+ * executable, which lives in `installDir`.
+ */
+export function managedValeExePath(installDir: string, platform: string): string {
+  const windows = platform === "win32";
+  return (windows ? path.win32 : path.posix).join(
+    installDir,
+    "vale_bin",
+    windows ? "vale.exe" : "vale"
+  );
+}
+
+/**
+ * Whether to start the language server given `vale.startOnLanguages` and the
+ * language IDs of the documents that are open. A `"*"` entry means always.
+ */
+export function shouldStartForLanguages(
+  configured: readonly string[],
+  openLanguageIds: Iterable<string>
+): boolean {
+  if (configured.includes("*")) return true;
+  for (const id of openLanguageIds) {
+    if (configured.includes(id)) return true;
+  }
+  return false;
+}
+
+/** The parts of `vale ls-config` output that say which files Vale lints. */
+export interface ValeGlobConfig {
+  SBaseStyles?: Record<string, unknown> | null;
+  SChecks?: Record<string, unknown> | null;
+  GChecks?: Record<string, unknown> | null;
+  GBaseStyles?: Record<string, unknown> | unknown[] | null;
+  Formats?: Record<string, string> | null;
+}
+
+/**
+ * Builds the absolute file patterns the language client should send to
+ * vale-ls, from the section globs in the Vale config (`[*.md]`,
+ * `[docs/**\/*.rst]`) and the extensions it maps with `[formats]`. Returns
+ * `undefined`, meaning "every file", when the config cannot be read, has no
+ * sections, or applies styles to everything - so narrowing never hides a
+ * file Vale would have linted, and config errors still surface.
+ */
+export function buildDocumentSelectorPatterns(
+  folderPath: string | undefined,
+  config: ValeGlobConfig | null | undefined
+): string[] | undefined {
+  if (!config) return undefined;
+  const hasGlobalRules =
+    Object.keys(config.GBaseStyles ?? {}).length > 0 ||
+    Object.keys(config.GChecks ?? {}).length > 0;
+  const globs = [...new Set([
+    ...Object.keys(config.SBaseStyles ?? {}),
+    ...Object.keys(config.SChecks ?? {}),
+  ])];
+  if (hasGlobalRules || globs.length === 0 || globs.includes("*")) {
+    return undefined;
+  }
+
+  const root = folderPath?.replace(/\\/g, "/").replace(/\/+$/, "");
+  const anywhere = (glob: string) => (root ? `${root}/**/${glob}` : `**/${glob}`);
+  const patterns = new Set<string>();
+  for (const raw of globs) {
+    const glob = raw.replace(/\\/g, "/").replace(/^\.\//, "");
+    patterns.add(glob.includes("/") ? (root ? `${root}/${glob}` : `**/${glob}`) : anywhere(glob));
+  }
+  for (const extension of Object.keys(config.Formats ?? {})) {
+    patterns.add(anywhere(`*.${extension.replace(/^\./, "")}`));
+  }
+  return [...patterns];
+}
+
+/**
+ * Whether **Vale: Sync** should run through the language server (its
+ * `cli.sync` command) instead of the extension running `vale sync` itself.
+ * Only when the user asks (`vale.valeCLI.syncViaLanguageServer`), or when
+ * there is no Vale on `PATH` so the only Vale is the server's managed copy.
+ * Docker, an explicit `vale.valeCLI.path`, and an explicitly chosen managed
+ * copy (`alwaysManaged`) keep the direct call, which streams output and can
+ * be cancelled.
+ */
+export function shouldSyncViaLanguageServer(input: {
+  explicit: boolean;
+  dockerActive: boolean;
+  source: ValeSource;
+  alwaysManaged: boolean;
+}): boolean {
+  if (input.explicit) return true;
+  if (input.dockerActive) return false;
+  return input.source === "managed" && !input.alwaysManaged;
 }

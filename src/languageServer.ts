@@ -9,7 +9,11 @@ import * as path from "path";
 
 import {
   LSP_TAG,
+  MIN_VALE_CONFIG_DIR_VERSION,
   MIN_VALE_FILTER_VERSION,
+  describeValeVersion,
+  formatValeVersion,
+  VALE_CONFIG_FILE_GLOB,
   buildDownloadAssetName,
   detectArch,
   detectPlatform,
@@ -19,30 +23,36 @@ import {
   parseValeVersion,
   sha256Hex,
   buildDockerProxyEnvironment,
+  buildDocumentSelectorPatterns,
   buildValeConfigArgs,
   formatProbeResult,
   isProbeSuccessful,
   capDiagnostics,
   isUnsupportedLinuxLibc,
-  resolveValeBinaryPath,
   SharedRegistry,
 } from "./utils";
 import type { ValeExecutionOptions } from "./utils";
-import { buildValeConfig, resolveValeExecutionOptions } from "./config";
+import {
+  buildValeConfig,
+  resolveValeExecutionOptions,
+  resolveValeSourceForFolder,
+} from "./config";
 import { clientKeyFor, noFolderClientKey } from "./workspaceFolders";
+import { ClientLifecycleQueue, usesConfigFile } from "./clientLifecycle";
 import { isServerReplaceFix } from "./codeActions";
 import {
   ensureDockerWrapperScript,
   getWindowsDockerProxy,
 } from "./docker";
-import { getValeOutputChannel } from "./ui";
-import { getValeVersionOutput, probeExecutable } from "./cli";
+import { clearClientStatus, getValeOutputChannel, setClientStatus } from "./ui";
+import { getValeConfig, getValeVersionOutput, probeExecutable } from "./cli";
 
 import {
   ExecuteCommandRequest,
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
+  State,
 } from "vscode-languageclient/node";
 
 /**
@@ -55,6 +65,7 @@ import {
  * take effect, so collapsing to one client trades that away.
  */
 const clients: Map<string, LanguageClient> = new Map();
+const lifecycle = new ClientLifecycleQueue();
 const VERSION_MARKER_NAME = ".vale-ls-version";
 
 /**
@@ -119,47 +130,67 @@ function logDiagnostic(message: string): void {
 }
 
 /**
- * Warns when the Vale CLI vale-ls will invoke predates the version whose
- * `--filter` flag accepts a raw expression (rather than only a file path or
- * named asset) - older versions fail every lint with a cryptic
- * `filter '<expr>' not found` as soon as any filter is sent, which happens
- * with default settings (`vale.enableSpellcheck` defaults to `false`, and
- * `buildValeConfig` always sends `.Extends != "spelling"` in that case, and
- * the same applies once a `vale.valeCLI.filter` expression is set). See
- * https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
- * `.claude/notes/vale-filter-version-check.md`.
+ * Probes the Vale CLI once at client start, logs its version to the Vale
+ * output channel (so **Vale: Show Diagnostics** always has it), and warns
+ * about the known features an old Vale can't support:
  *
- * Only called when `filterExpression` is non-empty, since that's exactly
- * the condition that triggers the bug - a user with no filter configured
- * (or an old-but-unfiltered setup) isn't affected and shouldn't be warned.
+ * - `--filter` with a raw expression (Vale < 3.10.0): every lint fails with a
+ *   cryptic `filter '<expr>' not found`. This happens on default settings
+ *   (`vale.enableSpellcheck` defaults to `false`, and `buildValeConfig`
+ *   always sends `.Extends != "spelling"` in that case), and again once a
+ *   `vale.valeCLI.filter` expression is set. Only checked when
+ *   `filterExpression` is non-empty. See
+ *   https://github.com/ChrisChinchilla/vale-vscode/issues/63 and
+ *   `.claude/notes/vale-filter-version-check.md`.
+ * - `.config/vale.ini` (Vale < 3.25.1): silently ignored. Only checked when
+ *   the folder has such a file and no explicit `vale.valeCLI.config`.
+ *
  * Failure to determine the version (missing binary, Docker unavailable,
- * unparseable output) is treated as "can't check" and silently skipped
- * rather than surfaced as its own error - `client.start()` will still
- * report the real problem if one exists.
+ * unparseable output) is logged and otherwise skipped rather than surfaced
+ * as its own error - `client.start()` will still report the real problem.
+ * With no `vale.valeCLI.path` or Docker, this probes `vale` on PATH, which
+ * may not be the managed install vale-ls uses.
  */
-async function warnIfValeTooOldForFilters(
+async function checkValeVersion(
   workingDir: string,
   execution: ValeExecutionOptions,
-  filterExpression: string
+  filterExpression: string,
+  usesDefaultConfigDirectory: boolean
 ): Promise<void> {
-  if (!filterExpression) return;
-
   const output = await getValeVersionOutput(workingDir, execution);
+  logDiagnostic(describeValeVersion(output));
   if (!output) return;
 
   const version = parseValeVersion(output);
-  if (!version || isVersionAtLeast(version, MIN_VALE_FILTER_VERSION)) return;
+  if (!version) return;
+  const current = formatValeVersion(version);
 
-  const [major, minor, patch] = version;
-  const [minMajor, minMinor, minPatch] = MIN_VALE_FILTER_VERSION;
-  const message =
-    `Vale ${major}.${minor}.${patch} is too old to apply Vale VSCode's filter ` +
-    `settings (minAlertLevel/enableSpellcheck/filter) - Vale ${minMajor}.${minMinor}.${minPatch}+ ` +
-    `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
-    `set vale.valeCLI.minAlertLevel to "inherited", vale.enableSpellcheck to true, and clear ` +
-    `vale.valeCLI.filter to avoid sending a filter at all.`;
-  logDiagnostic(message);
-  vscode.window.showWarningMessage(`Vale: ${message}`);
+  if (
+    filterExpression &&
+    !isVersionAtLeast(version, MIN_VALE_FILTER_VERSION)
+  ) {
+    const min = formatValeVersion(MIN_VALE_FILTER_VERSION);
+    const message =
+      `Vale ${current} is too old to apply Vale VSCode's filter ` +
+      `settings (minAlertLevel/enableSpellcheck/filter) - Vale ${min}+ ` +
+      `is required, or linting will fail with "filter '...' not found". Upgrade Vale, or ` +
+      `set vale.valeCLI.minAlertLevel to "inherited", vale.enableSpellcheck to true, and clear ` +
+      `vale.valeCLI.filter to avoid sending a filter at all.`;
+    logDiagnostic(message);
+    vscode.window.showWarningMessage(`Vale: ${message}`);
+  }
+
+  if (
+    usesDefaultConfigDirectory &&
+    !isVersionAtLeast(version, MIN_VALE_CONFIG_DIR_VERSION)
+  ) {
+    const message =
+      `Vale ${current} does not read .config/vale.ini - Vale ` +
+      `${formatValeVersion(MIN_VALE_CONFIG_DIR_VERSION)}+ is required. Upgrade Vale, ` +
+      `or move the file to .vale.ini, or point vale.valeCLI.config at it.`;
+    logDiagnostic(message);
+    vscode.window.showWarningMessage(`Vale: ${message}`);
+  }
 }
 
 let languageServerChannel: vscode.LogOutputChannel | undefined;
@@ -265,23 +296,38 @@ async function downloadLSP(context: ExtensionContext): Promise<void> {
   );
 
   try {
-    vscode.window.showInformationMessage(
-      "First launch: Downloading Vale Language Server"
+    const { buffer, expectedLength } = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Vale: Downloading Vale Language Server ${LSP_TAG}`,
+        cancellable: true,
+      },
+      async (_progress, token) => {
+        const abort = new AbortController();
+        token.onCancellationRequested(() => abort.abort());
+        try {
+          const response = await fetch(URL, { signal: abort.signal });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to download ${assetName}: HTTP ${response.status} ${response.statusText}`
+            );
+          }
+          if (!response.body) {
+            throw new Error("Failed to fetch the response body.");
+          }
+          return {
+            buffer: Buffer.from(await response.arrayBuffer()),
+            expectedLength: response.headers.get("content-length"),
+          };
+        } catch (error) {
+          if (token.isCancellationRequested) {
+            throw new Error("Download of the Vale Language Server was cancelled.");
+          }
+          throw error;
+        }
+      }
     );
 
-    const response = await fetch(URL);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to download ${assetName}: HTTP ${response.status} ${response.statusText}`
-      );
-    }
-    if (!response.body) {
-      throw new Error("Failed to fetch the response body.");
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    const expectedLength = response.headers.get("content-length");
     if (expectedLength && buffer.length !== Number(expectedLength)) {
       throw new Error(
         `Download size mismatch for ${assetName}: expected ${expectedLength} bytes, got ${buffer.length}.`
@@ -382,12 +428,37 @@ export function hasActiveClients(): boolean {
 }
 
 /**
+ * Runs the language server's own `cli.sync` for `folder`'s client (the
+ * no-folder client when `folder` is undefined). The server syncs with the
+ * Vale and configuration it lints with. Resolves once the sync has finished,
+ * `false` if that folder has no running client; the server reports the
+ * result itself with a message.
+ */
+export async function syncViaLanguageServer(
+  folder?: vscode.WorkspaceFolder
+): Promise<boolean> {
+  const client = clients.get(clientKeyFor(folder));
+  if (!client || client.state !== State.Running) return false;
+  await client.sendRequest(ExecuteCommandRequest.type, {
+    command: "cli.sync",
+    arguments: [],
+  });
+  return true;
+}
+
+/**
  * Stops and forgets the client registered under `key`, if any. Used both to
  * tear a folder's client down on removal and to guard against double
  * activation.
  */
 export async function stopAndRemoveClient(key: string): Promise<void> {
+  return lifecycle.run(key, "stop", () => stopClient(key));
+}
+
+async function stopClient(key: string): Promise<void> {
   const existing = clients.get(key);
+  // A failed start leaves an error status but no client; drop it either way.
+  clearClientStatus(key);
   if (!existing) {
     return;
   }
@@ -401,7 +472,7 @@ export async function stopAndRemoveClient(key: string): Promise<void> {
 }
 
 export async function stopAllClients(): Promise<void> {
-  await Promise.all(Array.from(clients.keys()).map(stopAndRemoveClient));
+  await Promise.all([...new Set([...clients.keys(), ...lifecycle.keys()])].map(stopAndRemoveClient));
 }
 
 /**
@@ -414,27 +485,35 @@ export async function startClientForFolder(
   context: ExtensionContext,
   folder?: vscode.WorkspaceFolder
 ): Promise<void> {
+  return lifecycle.run(clientKeyFor(folder), "start", () => startClient(serverPath, context, folder));
+}
+
+async function startClient(
+  serverPath: string,
+  context: ExtensionContext,
+  folder?: vscode.WorkspaceFolder
+): Promise<void> {
   const key = clientKeyFor(folder);
-  await stopAndRemoveClient(key);
+  await stopClient(key);
 
   const workspaceRoot = folder?.uri.fsPath;
   const configuration = vscode.workspace.getConfiguration(undefined, folder?.uri);
 
   const windowsProxy =
     process.platform === "win32" ? getWindowsDockerProxy(context) : undefined;
+  const installDir = getInstallDir(context);
+  const source = resolveValeSourceForFolder(configuration, workspaceRoot, installDir);
   const execution = resolveValeExecutionOptions(
     configuration,
     workspaceRoot,
+    installDir,
     process.platform,
     windowsProxy?.path,
     windowsProxy?.unavailableReason
   );
-  // Leave this unset when no custom path is configured so vale-ls can still
-  // honor installVale and manage its own Vale binary.
-  const rawValeBinaryPath = configuration.get<string>("vale.valeCLI.path") || "";
-  let valeBinaryPath = rawValeBinaryPath
-    ? resolveValeBinaryPath(rawValeBinaryPath, workspaceRoot, vscode.workspace.isTrusted)
-    : undefined;
+  // Unset only when the managed copy is in use, so vale-ls downloads and runs
+  // its own; otherwise the configured or PATH Vale is pinned.
+  let valeBinaryPath = source.languageServerPath;
   if (execution.dockerUnavailableReason) {
     vscode.window.showWarningMessage(`Vale: ${execution.dockerUnavailableReason}`);
   }
@@ -454,10 +533,11 @@ export async function startClientForFolder(
     configuration,
     workspaceRoot,
     valeBinaryPath,
-    Boolean(execution.docker)
+    Boolean(execution.docker),
+    source.installVale
   );
   logDiagnostic(
-    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : valeBinaryPath ?? "PATH/vale-ls managed install"}`
+    `Workspace ${workspaceRoot ?? "<no folder>"}; config ${valeConfig.configPath || "<auto>"}; Vale ${execution.docker ? `Docker image ${execution.docker.image}${execution.docker.proxyPath ? ` via ${execution.docker.proxyPath}` : ""}` : `${source.source}: ${execution.binaryPath}`}`
   );
   if (execution.docker && valeBinaryPath) {
     void logDockerPreflight(
@@ -470,10 +550,19 @@ export async function startClientForFolder(
       valeConfig.noGlobal
     );
   }
-  await warnIfValeTooOldForFilters(
+  // Only `.config/vale.ini` is at stake: an older Vale still finds a root
+  // `.vale.ini`/`_vale.ini`, so a project that has one isn't affected.
+  const usesDefaultConfigDirectory =
+    Boolean(workspaceRoot) &&
+    !valeConfig.configPath &&
+    fs.existsSync(path.join(workspaceRoot!, ".config", "vale.ini")) &&
+    !fs.existsSync(path.join(workspaceRoot!, ".vale.ini")) &&
+    !fs.existsSync(path.join(workspaceRoot!, "_vale.ini"));
+  await checkValeVersion(
     workspaceRoot ?? process.cwd(),
     execution,
-    valeConfig.filter
+    valeConfig.filter,
+    usesDefaultConfigDirectory
   );
 
   const tempArgs: never[] = [];
@@ -494,20 +583,28 @@ export async function startClientForFolder(
     debug: { command: serverPath, args: tempArgs, options: executableOptions },
   };
 
-  const documentSelector: LanguageClientOptions["documentSelector"] = folder
-    ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
-    : [{ scheme: "file", language: "*" }];
-
-  const fileWatcherPattern: vscode.GlobPattern = folder
-    ? new vscode.RelativePattern(folder, "**/.clientrc")
-    : "**/.clientrc";
+  // Only send files the Vale config can lint (its section globs and
+  // [formats]), falling back to every file when the config can't be read -
+  // for example before the managed Vale is first installed.
+  const selectorPatterns = buildDocumentSelectorPatterns(
+    workspaceRoot,
+    await getValeConfig(
+      workspaceRoot ?? process.cwd(),
+      execution,
+      valeConfig.configPath,
+      valeConfig.noGlobal
+    )
+  );
+  logDiagnostic(`Document selector: ${selectorPatterns?.join(", ") ?? "all files"}`);
+  const documentSelector: LanguageClientOptions["documentSelector"] = selectorPatterns
+    ? selectorPatterns.map((pattern) => ({ scheme: "file", pattern }))
+    : folder
+      ? [{ scheme: "file", language: "*", pattern: `${folder.uri.fsPath}/**/*` }]
+      : [{ scheme: "file", language: "*" }];
 
   const clientOptions: LanguageClientOptions = {
     initializationOptions: valeConfig,
     documentSelector,
-    synchronize: {
-      fileEvents: workspace.createFileSystemWatcher(fileWatcherPattern),
-    },
     workspaceFolder: folder,
     // One shared channel for server logs and `vale.trace.server` traffic,
     // instead of a per-client channel named after the workspace folder.
@@ -543,12 +640,29 @@ export async function startClientForFolder(
   const client = new LanguageClient(clientId, clientName, serverOptions, clientOptions);
   suppressCommandRegistration(client);
   clients.set(key, client);
+  const statusName = folder?.name ?? "Vale";
+  setClientStatus(key, statusName, "starting");
+  // A server that dies after a successful start (crash, killed binary) never
+  // reaches the catch below; surface it too. `clients.get(key) === client`
+  // keeps an intentional stop/restart from reading as a failure.
+  client.onDidChangeState((event) => {
+    if (event.newState === State.Stopped && clients.get(key) === client) {
+      setClientStatus(key, statusName, "error", "The server stopped unexpectedly");
+    }
+  });
 
   try {
     await client.start();
     shareServerCommands(client);
+    setClientStatus(key, statusName, "ready");
   } catch (err) {
     console.error(err);
+    setClientStatus(
+      key,
+      statusName,
+      "error",
+      err instanceof Error ? err.message : String(err)
+    );
     logDiagnostic(
       `Failed to start Vale Language Server${folder ? ` for ${folder.uri.toString()}` : ""}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`
     );
@@ -620,6 +734,9 @@ const VALE_CONFIG_SETTINGS = [
   "vale.valeCLI.syncOnStartup",
   "vale.valeCLI.installVale",
   "vale.valeCLI.noGlobal",
+  "vale.valeCLI.lintOnChange",
+  "vale.valeCLI.debounceMs",
+  "vale.valeCLI.showMetrics",
   "vale.valeCLI.path",
   "vale.docker.enabled",
   "vale.docker.image",
@@ -654,5 +771,63 @@ export function registerConfigurationWatcher(
         await startClientForFolder(serverPath, context, undefined);
       }
     })
+  );
+}
+
+/**
+ * Restarts the affected client when a Vale config file (`.vale.ini`,
+ * `_vale.ini`, or `.config/vale.ini`) is created, changed, or deleted.
+ *
+ * vale-ls ignores `workspace/didChangeWatchedFiles` and runs `vale` afresh
+ * for each lint, so a config edit already applies to the *next* lint - what
+ * it can't do is refresh diagnostics already showing in open documents.
+ * Restarting the client re-opens and re-lints them. Rapid bursts of events
+ * (a save that touches several files, branch switches) collapse into one
+ * restart per folder.
+ */
+export function registerValeConfigFileWatcher(
+  context: ExtensionContext,
+  serverPath: string
+): void {
+  const watcher = workspace.createFileSystemWatcher(VALE_CONFIG_FILE_GLOB);
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const scheduleRestart = (folder?: vscode.WorkspaceFolder) => {
+    const key = clientKeyFor(folder);
+    clearTimeout(pending.get(key));
+    pending.set(
+      key,
+      setTimeout(() => {
+        pending.delete(key);
+        if (folder && !workspace.workspaceFolders?.some((current) => clientKeyFor(current) === key)) return;
+        // Only restart a client that is running; a failed start shouldn't be
+        // retried on every config save.
+        if (!clients.has(key)) return;
+        startClientForFolder(serverPath, context, folder).catch((error) =>
+          console.error("Failed to restart Vale after config change:", error)
+        );
+      }, 500)
+    );
+  };
+
+  const restartFor = (uri: vscode.Uri) => {
+    const owner = workspace.getWorkspaceFolder(uri);
+    const folders = workspace.workspaceFolders;
+    const candidates = folders?.length ? folders : [undefined];
+    for (const folder of candidates) {
+      const configuration = workspace.getConfiguration(undefined, folder?.uri);
+      const configPath = buildValeConfig(configuration, folder?.uri.fsPath).configPath;
+      if (folder === owner || usesConfigFile(configPath, folder?.uri.fsPath, uri.fsPath)) {
+        scheduleRestart(folder);
+      }
+    }
+  };
+
+  context.subscriptions.push(
+    watcher,
+    watcher.onDidCreate(restartFor),
+    watcher.onDidChange(restartFor),
+    watcher.onDidDelete(restartFor),
+    { dispose: () => pending.forEach((timer) => clearTimeout(timer)) }
   );
 }
